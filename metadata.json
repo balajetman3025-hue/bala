@@ -1,0 +1,6 @@
+{
+  "name": "Meri Dukan",
+  "description": "Comprehensive shop management and retail billing platform with dedicated portals for business owners and customers, featuring GST billing, product inventory, analytics, and order checkout.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
