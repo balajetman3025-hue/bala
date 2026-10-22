@@ -77,7 +77,27 @@ export const AppContent: React.FC = () => {
       return <ChoiceScreen />;
   }
 };
-
 export default function App() {
   return <AppContent />;
 }
+import { useEffect, useState } from "react";
+import { apiRequest } from "./api";
+
+function App() {
+  const [data, setData] = useState<unknown>(null);
+
+  useEffect(() => {
+    apiRequest("/api/health")
+      .then(setData)
+      .catch(console.error);
+  }, []);
+
+  return (
+    <main>
+      <h1>My Application</h1>
+      <pre>{JSON.stringify(data, null, 2)}</pre>
+    </main>
+  );
+}
+
+export default App;
