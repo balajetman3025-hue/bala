@@ -80,24 +80,18 @@ export const AppContent: React.FC = () => {
 export default function App() {
   return <AppContent />;
 }
-import { useEffect, useState } from "react";
-import { apiRequest } from "./api";
+const API_URL = import.meta.env.VITE_API_URL;
 
-function App() {
-  const [data, setData] = useState<unknown>(null);
+export async function apiRequest(endpoint: string) {
+  if (!API_URL) {
+    throw new Error("VITE_API_URL is not configured");
+  }
 
-  useEffect(() => {
-    apiRequest("/api/health")
-      .then(setData)
-      .catch(console.error);
-  }, []);
+  const response = await fetch(`${API_URL}${endpoint}`);
 
-  return (
-    <main>
-      <h1>My Application</h1>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
-    </main>
-  );
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  return response.json();
 }
-
-export default App;
