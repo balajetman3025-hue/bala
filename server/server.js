@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import db from './db.js';
-import { runSeed } from './seed.js';
+import { hashPassword, verifyPassword } from './auth.js';
 
 dotenv.config();
 
@@ -12,35 +12,26 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Run seed if database is freshly created
-runSeed(false);
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'MERIDUKAN Backend API', time: new Date().toISOString() });
 });
 
 // ==========================================
-// 1. OWNER PROFILE
+// 1. AUTHENTICATION & PASSWORDS (OWNER)
 // ==========================================
-app.get('/api/profile', (req, res) => {
+app.post('/api/auth/owner/register', (req, res) => {
   try {
-    const profile = db.prepare('SELECT * FROM owner_profile WHERE id = 1').get();
-    if (!profile) {
-      return res.status(404).json({ error: 'Owner profile not found' });
+    const { ownerName, businessName, email, password, mobile, address, gstNumber, website, upi, bankAccount, ifsc } = req.body;
+    if (!ownerName || !businessName || !email) {
+      return res.status(400).json({ error: 'Owner name, business name, and email are required.' });
     }
-    res.json(profile);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-app.put('/api/profile', (req, res) => {
-  try {
-    const { ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc } = req.body;
+    const passwordHash = password ? hashPassword(password) : null;
+
     db.prepare(`
-      INSERT INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, passwordHash, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         ownerName = excluded.ownerName,
         businessName = excluded.businessName,
@@ -52,10 +43,140 @@ app.put('/api/profile', (req, res) => {
         upi = excluded.upi,
         bankAccount = excluded.bankAccount,
         ifsc = excluded.ifsc,
+        passwordHash = COALESCE(excluded.passwordHash, owner_profile.passwordHash),
         updated_at = CURRENT_TIMESTAMP
-    `).run(ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc);
+    `).run(ownerName, businessName, gstNumber || '', address || '', mobile || '', email, website || '', upi || '', bankAccount || '', ifsc || '', passwordHash);
 
-    const updated = db.prepare('SELECT * FROM owner_profile WHERE id = 1').get();
+    const profile = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
+    res.status(201).json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/owner/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+
+    const owner = db.prepare('SELECT * FROM owner_profile WHERE email = ? OR id = 1').get(email);
+    if (!owner) {
+      return res.status(401).json({ error: 'No owner profile registered. Please register first.' });
+    }
+
+    // If an owner account has a passwordHash, verify it with timing-safe comparison
+    if (owner.passwordHash) {
+      const isValid = verifyPassword(password, owner.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+    }
+
+    // Do not return passwordHash in the response
+    const { passwordHash: _, ...safeProfile } = owner;
+    res.json(safeProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 2. AUTHENTICATION & PASSWORDS (CUSTOMER)
+// ==========================================
+app.post('/api/auth/customer/register', (req, res) => {
+  try {
+    const { customerName, mobile, email, password, address } = req.body;
+    if (!customerName || !mobile) {
+      return res.status(400).json({ error: 'Customer name and mobile number are required.' });
+    }
+
+    const existing = db.prepare('SELECT * FROM customer_profiles WHERE mobile = ? OR (email IS NOT NULL AND email = ?)').get(mobile, email || null);
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this mobile or email already exists.' });
+    }
+
+    const passwordHash = password ? hashPassword(password) : null;
+    const stmt = db.prepare(`
+      INSERT INTO customer_profiles (customerName, mobile, email, address, passwordHash)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(customerName, mobile, email || '', address || '', passwordHash);
+
+    const created = db.prepare('SELECT id, customerName, mobile, email, address FROM customer_profiles WHERE id = ?').get(Number(info.lastInsertRowid));
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/customer/login', (req, res) => {
+  try {
+    const { email, mobile, password } = req.body;
+    const identifier = email || mobile;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Email/mobile and password are required.' });
+    }
+
+    const customer = db.prepare('SELECT * FROM customer_profiles WHERE email = ? OR mobile = ?').get(identifier, identifier);
+    if (!customer) {
+      return res.status(401).json({ error: 'Customer account not found. Please register.' });
+    }
+
+    if (customer.passwordHash) {
+      const isValid = verifyPassword(password, customer.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid email/mobile or password.' });
+      }
+    }
+
+    const { passwordHash: _, ...safeProfile } = customer;
+    res.json(safeProfile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 3. OWNER PROFILE
+// ==========================================
+app.get('/api/profile', (req, res) => {
+  try {
+    const profile = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
+    if (!profile) {
+      return res.status(404).json({ error: 'Owner profile not found' });
+    }
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/profile', (req, res) => {
+  try {
+    const { ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, password } = req.body;
+    const newHash = password ? hashPassword(password) : null;
+
+    db.prepare(`
+      INSERT INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, passwordHash, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        ownerName = excluded.ownerName,
+        businessName = excluded.businessName,
+        gstNumber = excluded.gstNumber,
+        address = excluded.address,
+        mobile = excluded.mobile,
+        email = excluded.email,
+        website = excluded.website,
+        upi = excluded.upi,
+        bankAccount = excluded.bankAccount,
+        ifsc = excluded.ifsc,
+        passwordHash = COALESCE(?, owner_profile.passwordHash),
+        updated_at = CURRENT_TIMESTAMP
+    `).run(ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, newHash, newHash);
+
+    const updated = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -63,7 +184,7 @@ app.put('/api/profile', (req, res) => {
 });
 
 // ==========================================
-// 2. PRODUCTS
+// 4. PRODUCTS
 // ==========================================
 app.get('/api/products', (req, res) => {
   try {
@@ -160,7 +281,7 @@ app.delete('/api/products/:id', (req, res) => {
 });
 
 // ==========================================
-// 3. BILLS & POS INVOICING
+// 5. BILLS & POS INVOICING
 // ==========================================
 app.get('/api/bills', (req, res) => {
   try {
@@ -303,7 +424,7 @@ app.delete('/api/bills/:id', (req, res) => {
 });
 
 // ==========================================
-// 4. CUSTOMERS CRM
+// 6. CUSTOMERS CRM
 // ==========================================
 app.get('/api/customers', (req, res) => {
   try {
@@ -347,7 +468,7 @@ app.delete('/api/customers/:id', (req, res) => {
 });
 
 // ==========================================
-// 5. EMPLOYEES
+// 7. EMPLOYEES
 // ==========================================
 app.get('/api/employees', (req, res) => {
   try {
@@ -391,7 +512,7 @@ app.delete('/api/employees/:id', (req, res) => {
 });
 
 // ==========================================
-// 6. ONLINE CUSTOMER ORDERS
+// 8. ONLINE CUSTOMER ORDERS
 // ==========================================
 app.get('/api/orders', (req, res) => {
   try {
@@ -496,41 +617,12 @@ app.post('/api/orders', (req, res) => {
 });
 
 // ==========================================
-// 7. CUSTOMER AUTHENTICATION & PROFILES
-// ==========================================
-app.post('/api/auth/customer', (req, res) => {
-  try {
-    const { customerName, mobile, address, email } = req.body;
-    if (!mobile) return res.status(400).json({ error: 'Mobile number is required' });
-
-    let profile = db.prepare('SELECT * FROM customer_profiles WHERE mobile = ?').get(mobile);
-    if (!profile) {
-      const stmt = db.prepare('INSERT INTO customer_profiles (customerName, mobile, address, email) VALUES (?, ?, ?, ?)');
-      const info = stmt.run(customerName || 'Customer', mobile, address || '', email || '');
-      profile = db.prepare('SELECT * FROM customer_profiles WHERE id = ?').get(Number(info.lastInsertRowid));
-    } else if (customerName || address || email) {
-      db.prepare(`
-        UPDATE customer_profiles SET
-          customerName = COALESCE(?, customerName),
-          address = COALESCE(?, address),
-          email = COALESCE(?, email)
-        WHERE id = ?
-      `).run(customerName, address, email, profile.id);
-      profile = db.prepare('SELECT * FROM customer_profiles WHERE id = ?').get(profile.id);
-    }
-    res.json(profile);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ==========================================
-// 8. DATABASE BACKUP & RESTORE (JSON)
+// 9. DATABASE BACKUP & RESTORE (JSON)
 // ==========================================
 app.get('/api/backup', (req, res) => {
   try {
     const backup = {
-      ownerProfile: db.prepare('SELECT * FROM owner_profile WHERE id = 1').get(),
+      ownerProfile: db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get(),
       products: db.prepare('SELECT * FROM products').all(),
       customers: db.prepare('SELECT * FROM customers').all(),
       employees: db.prepare('SELECT * FROM employees').all(),

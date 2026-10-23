@@ -1,10 +1,10 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, User, ChevronRight, Store, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Building2, User, ChevronRight, Store, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const ChoiceScreen: React.FC = () => {
-  const { navigateTo, loginAsOwner, loginAsCustomer } = useApp();
+  const { navigateTo } = useApp();
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -103,32 +103,6 @@ export const ChoiceScreen: React.FC = () => {
               </div>
             </button>
           </motion.div>
-        </div>
-
-        {/* Quick Demo Access Bar */}
-        <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-            <p className="text-xs font-bold text-indigo-900 uppercase tracking-wide">
-              Quick Test / Instant Demo Access
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button
-              onClick={() => loginAsOwner('owner@meridukan.com')}
-              id="quick-demo-owner-btn"
-              className="py-2 px-3 bg-white hover:bg-indigo-600 hover:text-white text-indigo-700 font-semibold rounded-lg border border-indigo-200 transition-colors shadow-2xs"
-            >
-              1-Click Owner Demo
-            </button>
-            <button
-              onClick={() => loginAsCustomer('Priya Mehta', '+91 9820011223', 'priya@example.com')}
-              id="quick-demo-customer-btn"
-              className="py-2 px-3 bg-white hover:bg-emerald-600 hover:text-white text-emerald-700 font-semibold rounded-lg border border-emerald-200 transition-colors shadow-2xs"
-            >
-              1-Click Customer Demo
-            </button>
-          </div>
         </div>
       </div>
     </div>

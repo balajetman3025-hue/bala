@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { User, Phone, Mail, Home, Lock, ArrowLeft, ArrowRight } from 'lucide-react';
+import { User, Phone, Mail, Home, Lock, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 export const CustomerRegistrationScreen: React.FC = () => {
   const { navigateTo, registerCustomer } = useApp();
@@ -15,28 +15,42 @@ export const CustomerRegistrationScreen: React.FC = () => {
   });
 
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.customerName.trim() || !formData.mobile.trim() || !formData.email.trim()) {
       setError('Please fill in your name, mobile number, and email.');
       return;
     }
-    if (formData.password && formData.password !== formData.confirmPassword) {
+    if (!formData.password || formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
-    registerCustomer({
-      customerName: formData.customerName,
-      mobile: formData.mobile,
-      address: formData.address,
-      email: formData.email,
-    });
+    setError('');
+    setLoading(true);
+    try {
+      await registerCustomer({
+        customerName: formData.customerName.trim(),
+        mobile: formData.mobile.trim(),
+        address: formData.address.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+    } catch (err: any) {
+      setError(err.message || 'Registration failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -130,7 +144,7 @@ export const CustomerRegistrationScreen: React.FC = () => {
                     id="cust-reg-email"
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="priya@example.com"
+                    placeholder="name@example.com"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     required
                   />
@@ -149,11 +163,11 @@ export const CustomerRegistrationScreen: React.FC = () => {
                 <textarea
                   name="address"
                   id="cust-reg-address"
-                  rows={2}
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="Flat No, Tower, Locality, City, Pincode"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                  rows={2}
+                  placeholder="House/Flat No., Apartment, Street, City, PIN"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -161,7 +175,7 @@ export const CustomerRegistrationScreen: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Password *
+                  Password * (Min 6 chars)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -204,17 +218,27 @@ export const CustomerRegistrationScreen: React.FC = () => {
 
             <button
               type="submit"
+              disabled={loading}
               id="cust-reg-submit-btn"
-              className="w-full mt-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Complete Registration & Shop</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <>
+                  <span>Complete Registration & Shop</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
           <div className="pt-4 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-500">
-              Already registered?{' '}
+              Already have an account?{' '}
               <button
                 onClick={() => navigateTo('customerLogin')}
                 id="cust-reg-login-link"

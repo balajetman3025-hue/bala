@@ -1,23 +1,31 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Mail, Lock, Eye, EyeOff, Building2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Building2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 export const OwnerLoginScreen: React.FC = () => {
   const { navigateTo, loginAsOwner } = useApp();
-  const [email, setEmail] = useState('owner@meridukan.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setError('Please enter both email and password.');
       return;
     }
     setError('');
-    loginAsOwner(email);
+    setLoading(true);
+    try {
+      await loginAsOwner(email.trim(), password);
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Invalid email or password.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -130,11 +138,21 @@ export const OwnerLoginScreen: React.FC = () => {
 
             <button
               type="submit"
+              disabled={loading}
               id="owner-login-submit-btn"
-              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Login as Business Owner</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Logging in...</span>
+                </>
+              ) : (
+                <>
+                  <span>Login as Business Owner</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 

@@ -24,4 +24,13 @@ if (fs.existsSync(schemaPath)) {
   db.exec(schema);
 }
 
+// Ensure passwordHash columns exist (auto-migration)
+try {
+  db.exec('ALTER TABLE owner_profile ADD COLUMN passwordHash TEXT;');
+} catch (e) {}
+
+try {
+  db.exec('ALTER TABLE customer_profiles ADD COLUMN passwordHash TEXT;');
+} catch (e) {}
+
 export default db;

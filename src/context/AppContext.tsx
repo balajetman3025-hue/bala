@@ -27,16 +27,16 @@ interface AppContextType {
   navigateTo: (screen: NavigationScreen) => void;
   goBack: () => void;
   
-  // Auth
+  // Auth & Passwords
   currentRole: AuthRole;
   ownerProfile: OwnerProfile;
   customerProfile: CustomerProfile;
   isLoggedIn: boolean;
-  loginAsOwner: (email?: string) => void;
-  loginAsCustomer: (name?: string, mobile?: string, email?: string) => void;
-  registerOwner: (profile: Partial<OwnerProfile>) => void;
-  registerCustomer: (profile: Partial<CustomerProfile>) => void;
-  updateOwnerProfile: (profile: Partial<OwnerProfile>) => void;
+  loginAsOwner: (email: string, password?: string) => Promise<void>;
+  loginAsCustomer: (identifier: string, password?: string) => Promise<void>;
+  registerOwner: (profile: Partial<OwnerProfile> & { password?: string }) => Promise<void>;
+  registerCustomer: (profile: Partial<CustomerProfile> & { password?: string }) => Promise<void>;
+  updateOwnerProfile: (profile: Partial<OwnerProfile> & { password?: string }) => void;
   logout: () => void;
 
   // Products (ProductViewModel)
@@ -94,7 +94,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
 
-  // Data persistence with localStorage as fallback/cache
+  // Data persistence with localStorage
   const [ownerProfile, setOwnerProfile] = useState<OwnerProfile>(() => {
     const saved = localStorage.getItem('meridukan_owner');
     return saved ? JSON.parse(saved) : initialOwnerProfile;
@@ -103,10 +103,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile>(() => {
     const saved = localStorage.getItem('meridukan_customer_user');
     return saved ? JSON.parse(saved) : {
-      customerName: 'Priya Mehta',
-      mobile: '+91 9820011223',
-      address: 'Tower 4, Ace City, Greater Noida West',
-      email: 'priya.mehta@example.com',
+      customerName: '',
+      mobile: '',
+      address: '',
+      email: '',
     };
   });
 
@@ -155,11 +155,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.getProfile(),
       ]);
 
-      if (pData.status === 'fulfilled' && pData.value.length > 0) setProducts(pData.value);
-      if (bData.status === 'fulfilled' && bData.value.length > 0) setBills(bData.value);
-      if (cData.status === 'fulfilled' && cData.value.length > 0) setCustomers(cData.value);
-      if (eData.status === 'fulfilled' && eData.value.length > 0) setEmployees(eData.value);
-      if (oData.status === 'fulfilled' && oData.value.length > 0) setOrders(oData.value);
+      if (pData.status === 'fulfilled') setProducts(pData.value || []);
+      if (bData.status === 'fulfilled') setBills(bData.value || []);
+      if (cData.status === 'fulfilled') setCustomers(cData.value || []);
+      if (eData.status === 'fulfilled') setEmployees(eData.value || []);
+      if (oData.status === 'fulfilled') setOrders(oData.value || []);
       if (profData.status === 'fulfilled' && profData.value) setOwnerProfile(profData.value);
     } catch {
       setIsBackendConnected(false);
@@ -227,51 +227,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Auth Handlers
-  const loginAsOwner = (_email?: string) => {
-    setCurrentRole('owner');
-    setIsLoggedIn(true);
-    navigateTo('ownerDashboard');
-  };
-
-  const loginAsCustomer = (name?: string, mobile?: string, email?: string) => {
-    setCurrentRole('customer');
-    setIsLoggedIn(true);
-    if (name) {
-      const updatedProfile = {
-        ...customerProfile,
-        customerName: name,
-        mobile: mobile || customerProfile.mobile,
-        email: email || customerProfile.email,
-      };
-      setCustomerProfile(updatedProfile);
-      api.customerAuth(updatedProfile).catch(() => {});
+  // Auth Handlers with Password Verification
+  const loginAsOwner = async (email: string, password?: string) => {
+    try {
+      const profile = await api.loginOwner({ email, password });
+      setOwnerProfile(profile);
+      setCurrentRole('owner');
+      setIsLoggedIn(true);
+      navigateTo('ownerDashboard');
+    } catch (err) {
+      throw err;
     }
-    navigateTo('customerDashboard');
   };
 
-  const registerOwner = (profile: Partial<OwnerProfile>) => {
+  const loginAsCustomer = async (identifier: string, password?: string) => {
+    try {
+      const profile = await api.loginCustomer({ email: identifier, mobile: identifier, password });
+      setCustomerProfile(profile);
+      setCurrentRole('customer');
+      setIsLoggedIn(true);
+      navigateTo('customerDashboard');
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const registerOwner = async (profile: Partial<OwnerProfile> & { password?: string }) => {
+    try {
+      const created = await api.registerOwner(profile);
+      setOwnerProfile(created);
+      setCurrentRole('owner');
+      setIsLoggedIn(true);
+      navigateTo('ownerDashboard');
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const registerCustomer = async (profile: Partial<CustomerProfile> & { password?: string }) => {
+    try {
+      const created = await api.registerCustomer(profile);
+      setCustomerProfile(created);
+      setCurrentRole('customer');
+      setIsLoggedIn(true);
+      navigateTo('customerDashboard');
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const updateOwnerProfile = (profile: Partial<OwnerProfile> & { password?: string }) => {
     const updated = { ...ownerProfile, ...profile };
     setOwnerProfile(updated);
-    setCurrentRole('owner');
-    setIsLoggedIn(true);
-    api.updateProfile(updated).catch(() => {});
-    navigateTo('ownerDashboard');
-  };
-
-  const registerCustomer = (profile: Partial<CustomerProfile>) => {
-    const updated = { ...customerProfile, ...profile };
-    setCustomerProfile(updated);
-    setCurrentRole('customer');
-    setIsLoggedIn(true);
-    api.customerAuth(updated).catch(() => {});
-    navigateTo('customerDashboard');
-  };
-
-  const updateOwnerProfile = (profile: Partial<OwnerProfile>) => {
-    const updated = { ...ownerProfile, ...profile };
-    setOwnerProfile(updated);
-    api.updateProfile(updated).catch(() => {});
+    api.updateProfile(profile).catch(() => {});
   };
 
   const logout = () => {
@@ -425,9 +433,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newOrder: OrderRecord = {
       id: tempId,
       orderNumber: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: customerProfile.customerName,
-      customerMobile: customerProfile.mobile,
-      customerAddress: customerProfile.address,
+      customerName: customerProfile.customerName || 'Customer',
+      customerMobile: customerProfile.mobile || '',
+      customerAddress: customerProfile.address || '',
       product: selectedProduct,
       quantity: orderQuantity,
       totalAmount: subTotal,
@@ -501,12 +509,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Database Backup / Reset
   const resetToDefaults = () => {
-    setProducts(initialProducts);
-    setBills(initialBills);
+    setProducts([]);
+    setBills([]);
     setOwnerProfile(initialOwnerProfile);
-    setCustomers(initialCustomers);
-    setEmployees(initialEmployees);
-    setOrders(initialOrders);
+    setCustomers([]);
+    setEmployees([]);
+    setOrders([]);
     localStorage.clear();
   };
 

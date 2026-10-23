@@ -24,10 +24,20 @@ export const api = {
   // Health
   checkHealth: () => request<{ status: string; service: string }>('/api/health'),
 
-  // Owner Profile
+  // Owner Authentication & Profile
+  loginOwner: (credentials: { email: string; password?: string }) =>
+    request<OwnerProfile>('/api/auth/owner/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  registerOwner: (profile: Partial<OwnerProfile> & { password?: string }) =>
+    request<OwnerProfile>('/api/auth/owner/register', { method: 'POST', body: JSON.stringify(profile) }),
   getProfile: () => request<OwnerProfile>('/api/profile'),
-  updateProfile: (profile: Partial<OwnerProfile>) => 
+  updateProfile: (profile: Partial<OwnerProfile> & { password?: string }) => 
     request<OwnerProfile>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),
+
+  // Customer Authentication & Profile
+  loginCustomer: (credentials: { email?: string; mobile?: string; password?: string }) =>
+    request<CustomerProfile>('/api/auth/customer/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  registerCustomer: (profile: Partial<CustomerProfile> & { password?: string }) =>
+    request<CustomerProfile>('/api/auth/customer/register', { method: 'POST', body: JSON.stringify(profile) }),
 
   // Products
   getProducts: () => request<Product[]>('/api/products'),
@@ -65,10 +75,6 @@ export const api = {
   getOrders: () => request<OrderRecord[]>('/api/orders'),
   createOrder: (order: Partial<OrderRecord>) =>
     request<OrderRecord>('/api/orders', { method: 'POST', body: JSON.stringify(order) }),
-
-  // Customer Authentication / Registration
-  customerAuth: (profile: Partial<CustomerProfile>) =>
-    request<CustomerProfile>('/api/auth/customer', { method: 'POST', body: JSON.stringify(profile) }),
 
   // Backup & Restore
   exportDatabase: () => request<any>('/api/backup'),

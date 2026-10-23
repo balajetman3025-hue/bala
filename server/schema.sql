@@ -1,6 +1,6 @@
--- MERIDUKAN SQL Database Schema
+-- MERIDUKAN SQL Database Schema (Production - Clean without Demo Data)
 
--- 1. Store Owner Profile
+-- 1. Store Owner Profile & Authentication
 CREATE TABLE IF NOT EXISTS owner_profile (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     ownerName TEXT NOT NULL,
@@ -8,21 +8,23 @@ CREATE TABLE IF NOT EXISTS owner_profile (
     gstNumber TEXT,
     address TEXT,
     mobile TEXT,
-    email TEXT,
+    email TEXT UNIQUE,
     website TEXT,
     upi TEXT,
     bankAccount TEXT,
     ifsc TEXT,
+    passwordHash TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Customer Profiles (Registered customer users)
+-- 2. Customer Profiles & Authentication
 CREATE TABLE IF NOT EXISTS customer_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customerName TEXT NOT NULL,
     mobile TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     address TEXT,
-    email TEXT,
+    passwordHash TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

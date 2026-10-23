@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, User, Phone, Mail, MapPin, FileText, Lock, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Building2, User, Phone, Mail, MapPin, FileText, Lock, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 export const OwnerRegistrationScreen: React.FC = () => {
   const { navigateTo, registerOwner } = useApp();
@@ -17,30 +17,44 @@ export const OwnerRegistrationScreen: React.FC = () => {
   });
 
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.ownerName.trim() || !formData.businessName.trim() || !formData.email.trim()) {
       setError('Please fill in all mandatory business fields.');
       return;
     }
-    if (formData.password && formData.password !== formData.confirmPassword) {
+    if (!formData.password || formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
-    registerOwner({
-      ownerName: formData.ownerName,
-      businessName: formData.businessName,
-      gstNumber: formData.gstNumber || 'Unregistered',
-      address: formData.address,
-      mobile: formData.mobile,
-      email: formData.email,
-    });
+    setError('');
+    setLoading(true);
+    try {
+      await registerOwner({
+        ownerName: formData.ownerName.trim(),
+        businessName: formData.businessName.trim(),
+        gstNumber: formData.gstNumber || 'Unregistered',
+        address: formData.address,
+        mobile: formData.mobile,
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+    } catch (err: any) {
+      setError(err.message || 'Registration failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -101,7 +115,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Business / Shop Name *
+                  Business / Store Name *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -113,7 +127,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
                     id="owner-reg-business-name"
                     value={formData.businessName}
                     onChange={handleChange}
-                    placeholder="e.g. Meri Dukan Super Store"
+                    placeholder="e.g. Modern Retail Store"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                     required
                   />
@@ -124,7 +138,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  GST Number (Optional)
+                  GSTIN Number (Optional)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -136,15 +150,15 @@ export const OwnerRegistrationScreen: React.FC = () => {
                     id="owner-reg-gst"
                     value={formData.gstNumber}
                     onChange={handleChange}
-                    placeholder="09AAECR1234F1Z8"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    placeholder="e.g. 09AAECR1234F1Z8"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 uppercase"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Mobile Number *
+                  Contact Mobile Number
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -158,7 +172,6 @@ export const OwnerRegistrationScreen: React.FC = () => {
                     onChange={handleChange}
                     placeholder="+91 9876543210"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    required
                   />
                 </div>
               </div>
@@ -166,7 +179,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Business Address
+                Shop / Office Address
               </label>
               <div className="relative">
                 <div className="absolute top-3 left-3 flex items-center pointer-events-none text-slate-400">
@@ -175,18 +188,18 @@ export const OwnerRegistrationScreen: React.FC = () => {
                 <textarea
                   name="address"
                   id="owner-reg-address"
-                  rows={2}
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="Shop No, Complex, City, Pincode"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
+                  rows={2}
+                  placeholder="Shop No., Market, City, State, PIN"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Email Address *
+                Login Email Address *
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -198,7 +211,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
                   id="owner-reg-email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="owner@meridukan.com"
+                  placeholder="owner@yourshop.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   required
                 />
@@ -208,7 +221,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Password *
+                  Password * (Min 6 chars)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -251,11 +264,21 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
             <button
               type="submit"
+              disabled={loading}
               id="owner-reg-submit-btn"
-              className="w-full mt-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Complete Registration & Open Dashboard</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Registering...</span>
+                </>
+              ) : (
+                <>
+                  <span>Complete Registration & Open Dashboard</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
