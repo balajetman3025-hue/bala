@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Store, User, LogOut, ShieldCheck, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Store, LogOut, ShieldCheck, ShoppingBag, Database } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -17,7 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   subtitle,
   rightAction,
 }) => {
-  const { goBack, currentRole, logout, navigateTo, ownerProfile } = useApp();
+  const { goBack, currentRole, logout, navigateTo, ownerProfile, isBackendConnected } = useApp();
 
   const handleBack = () => {
     if (onBack) {
@@ -58,6 +58,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* SQL Database Connection Badge */}
+          <div
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${
+              isBackendConnected
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
+            title={isBackendConnected ? 'Connected to SQLite database via Express backend' : 'Backend offline - Local cache active'}
+          >
+            <span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <Database className="w-3 h-3" />
+            <span>{isBackendConnected ? 'SQL Live' : 'Offline'}</span>
+          </div>
+
           {rightAction}
 
           {currentRole && (

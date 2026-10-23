@@ -1,11 +1,79 @@
-const API_URL = import.meta.env.VITE_API_URL;
+import { Product, Bill, OwnerProfile, CustomerRecord, Employee, OrderRecord, CustomerProfile } from './types';
 
-export async function apiRequest(endpoint: string) {
-  const response = await fetch(`${API_URL}${endpoint}`);
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const errorBody = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(errorBody.error || `HTTP error ${response.status}`);
   }
 
   return response.json();
 }
+
+export const api = {
+  // Health
+  checkHealth: () => request<{ status: string; service: string }>('/api/health'),
+
+  // Owner Profile
+  getProfile: () => request<OwnerProfile>('/api/profile'),
+  updateProfile: (profile: Partial<OwnerProfile>) => 
+    request<OwnerProfile>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),
+
+  // Products
+  getProducts: () => request<Product[]>('/api/products'),
+  getProduct: (id: number) => request<Product>(`/api/products/${id}`),
+  createProduct: (product: Omit<Product, 'id'>) =>
+    request<Product>('/api/products', { method: 'POST', body: JSON.stringify(product) }),
+  updateProduct: (product: Product) =>
+    request<Product>(`/api/products/${product.id}`, { method: 'PUT', body: JSON.stringify(product) }),
+  deleteProduct: (id: number) =>
+    request<{ success: boolean }>(`/api/products/${id}`, { method: 'DELETE' }),
+
+  // POS Invoices / Bills
+  getBills: () => request<Bill[]>('/api/bills'),
+  getBill: (id: number) => request<Bill>(`/api/bills/${id}`),
+  createBill: (bill: Omit<Bill, 'id'>) =>
+    request<Bill>('/api/bills', { method: 'POST', body: JSON.stringify(bill) }),
+  deleteBill: (id: number) =>
+    request<{ success: boolean }>(`/api/bills/${id}`, { method: 'DELETE' }),
+
+  // Customers CRM
+  getCustomers: () => request<CustomerRecord[]>('/api/customers'),
+  createCustomer: (customer: Omit<CustomerRecord, 'id'>) =>
+    request<CustomerRecord>('/api/customers', { method: 'POST', body: JSON.stringify(customer) }),
+  deleteCustomer: (id: number) =>
+    request<{ success: boolean }>(`/api/customers/${id}`, { method: 'DELETE' }),
+
+  // Employees / Staff
+  getEmployees: () => request<Employee[]>('/api/employees'),
+  createEmployee: (employee: Omit<Employee, 'id'>) =>
+    request<Employee>('/api/employees', { method: 'POST', body: JSON.stringify(employee) }),
+  deleteEmployee: (id: number) =>
+    request<{ success: boolean }>(`/api/employees/${id}`, { method: 'DELETE' }),
+
+  // Customer Shopping Orders
+  getOrders: () => request<OrderRecord[]>('/api/orders'),
+  createOrder: (order: Partial<OrderRecord>) =>
+    request<OrderRecord>('/api/orders', { method: 'POST', body: JSON.stringify(order) }),
+
+  // Customer Authentication / Registration
+  customerAuth: (profile: Partial<CustomerProfile>) =>
+    request<CustomerProfile>('/api/auth/customer', { method: 'POST', body: JSON.stringify(profile) }),
+
+  // Backup & Restore
+  exportDatabase: () => request<any>('/api/backup'),
+  restoreDatabase: (data: any) =>
+    request<{ success: boolean }>('/api/restore', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export default api;

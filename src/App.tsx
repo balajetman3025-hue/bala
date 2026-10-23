@@ -77,21 +77,7 @@ export const AppContent: React.FC = () => {
       return <ChoiceScreen />;
   }
 };
+
 export default function App() {
   return <AppContent />;
-}
-const API_URL = import.meta.env.VITE_API_URL;
-
-export async function apiRequest(endpoint: string) {
-  if (!API_URL) {
-    throw new Error("VITE_API_URL is not configured");
-  }
-
-  const response = await fetch(`${API_URL}${endpoint}`);
-
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
-
-  return response.json();
 }
