@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS owner_profile (
     gstNumber TEXT,
     address TEXT,
     mobile TEXT,
-    email TEXT UNIQUE,
+    email TEXT ,
     website TEXT,
     upi TEXT,
     bankAccount TEXT,
