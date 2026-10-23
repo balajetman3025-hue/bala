@@ -1,5 +1,7 @@
 export interface Product {
   id: number;
+  ownerId?: number;
+  storeName?: string;
   productName: string;
   description: string;
   company: string;
@@ -25,6 +27,7 @@ export interface BillItem {
 
 export interface Bill {
   id: number;
+  ownerId?: number;
   invoiceNumber: string;
   customerName: string;
   customerMobile: string;
@@ -39,6 +42,7 @@ export interface Bill {
 }
 
 export interface OwnerProfile {
+  id?: number;
   ownerName: string;
   businessName: string;
   gstNumber: string;
@@ -52,6 +56,7 @@ export interface OwnerProfile {
 }
 
 export interface CustomerProfile {
+  id?: number;
   customerName: string;
   mobile: string;
   address: string;
@@ -60,6 +65,7 @@ export interface CustomerProfile {
 
 export interface Employee {
   id: number;
+  ownerId?: number;
   name: string;
   role: string;
   mobile: string;
@@ -70,6 +76,7 @@ export interface Employee {
 
 export interface CustomerRecord {
   id: number;
+  ownerId?: number;
   name: string;
   mobile: string;
   address: string;
@@ -80,6 +87,7 @@ export interface CustomerRecord {
 
 export interface OrderRecord {
   id: number;
+  ownerId?: number;
   orderNumber: string;
   customerName: string;
   customerMobile: string;

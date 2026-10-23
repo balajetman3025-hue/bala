@@ -6,7 +6,6 @@ import {
   ShoppingBag,
   HeadphonesIcon,
   LogOut,
-  Search,
   ChevronRight,
   Store,
   Sparkles,
@@ -18,7 +17,6 @@ import { motion } from 'motion/react';
 export const CustomerDashboardScreen: React.FC = () => {
   const {
     customerProfile,
-    ownerProfile,
     products,
     orders,
     navigateTo,
@@ -28,7 +26,7 @@ export const CustomerDashboardScreen: React.FC = () => {
   const customerMenuItems = [
     {
       title: 'Products Catalog',
-      description: 'Explore store items, groceries & electronics',
+      description: 'Explore products from all verified store owners',
       count: `${products.length} Items Available`,
       icon: Package,
       color: 'bg-emerald-50 text-emerald-600 border-emerald-200',
@@ -62,8 +60,9 @@ export const CustomerDashboardScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Point 3: Company name removed from top of customer dashboard */}
       <Header
-        title={ownerProfile.businessName || 'MERIDUKAN Store'}
+        title="Customer Marketplace"
         subtitle={`Welcome, ${customerProfile.customerName || 'Valued Customer'}`}
       />
 
@@ -73,14 +72,13 @@ export const CustomerDashboardScreen: React.FC = () => {
           <div className="relative z-10 space-y-3 max-w-lg">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-xs font-semibold backdrop-blur-xs">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Verified Local Merchant
+              Verified Multi-Store Marketplace
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold font-heading">
               Welcome, {customerProfile.customerName || 'Customer'}!
             </h2>
             <p className="text-emerald-100 text-xs sm:text-sm leading-relaxed">
-              Order daily essentials, groceries, electronics & confectionery directly from{' '}
-              <strong>{ownerProfile.businessName}</strong> with doorstep delivery and genuine GST invoices.
+              Order daily essentials, groceries, flowers & electronics from verified local merchants with doorstep delivery and genuine GST invoices.
             </p>
             <div className="pt-2">
               <button
@@ -88,7 +86,7 @@ export const CustomerDashboardScreen: React.FC = () => {
                 id="customer-banner-shop-now-btn"
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-800 hover:bg-emerald-50 font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer"
               >
-                <span>Browse Product Catalog</span>
+                <span>Browse All Products</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -105,7 +103,7 @@ export const CustomerDashboardScreen: React.FC = () => {
             </div>
             <div>
               <p className="font-bold text-slate-900">100% Genuine Items</p>
-              <p className="text-slate-500">Direct from trusted suppliers</p>
+              <p className="text-slate-500">Direct from local store owners</p>
             </div>
           </div>
 
@@ -125,12 +123,12 @@ export const CustomerDashboardScreen: React.FC = () => {
             </div>
             <div>
               <p className="font-bold text-slate-900">Dedicated Support</p>
-              <p className="text-slate-500">{ownerProfile.mobile || 'Instant Help'}</p>
+              <p className="text-slate-500">Fast assistance & queries</p>
             </div>
           </div>
         </div>
 
-        {/* Grid menu matching Android customer dashboard */}
+        {/* Grid menu */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {customerMenuItems.map((item, idx) => {
             const IconComponent = item.icon;

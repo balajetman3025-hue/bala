@@ -17,6 +17,7 @@ build/
 
 # SQLite Database & Cache
 *.sqlite
+*.sqlite.bak
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm

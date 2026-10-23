@@ -8,11 +8,7 @@ import {
   QrCode,
   Building,
   CheckCircle2,
-  Truck,
-  Download,
   ShoppingBag,
-  ArrowRight,
-  ShieldCheck,
   Lock,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -23,7 +19,6 @@ export const PaymentScreen: React.FC = () => {
     orderQuantity,
     placeOrder,
     ownerProfile,
-    customerProfile,
     navigateTo,
     goBack,
   } = useApp();
@@ -105,7 +100,7 @@ export const PaymentScreen: React.FC = () => {
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
                 Your order has been forwarded to{' '}
-                <strong>{ownerProfile.businessName}</strong>. A receipt has been generated.
+                <strong>{completedOrder.product.storeName || ownerProfile.businessName || 'Verified Merchant Store'}</strong>. A receipt has been generated.
               </p>
             </div>
 
@@ -135,7 +130,9 @@ export const PaymentScreen: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Merchant Store:</span>
-                  <span className="text-slate-900 font-medium">{ownerProfile.businessName}</span>
+                  <span className="text-slate-900 font-medium">
+                    {completedOrder.product.storeName || ownerProfile.businessName || 'Verified Merchant Store'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Delivery To:</span>
@@ -222,7 +219,7 @@ export const PaymentScreen: React.FC = () => {
                   {paymentMethod === 'UPI' && (
                     <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-200 space-y-2">
                       <p className="text-[11px] font-semibold text-slate-600">
-                        Merchant Store VPA: <span className="font-mono text-indigo-700">{ownerProfile.upi || 'meridukan@okhdfcbank'}</span>
+                        Merchant: <span className="font-mono text-indigo-700">{selectedProduct?.storeName || 'Verified Store'}</span>
                       </p>
                       <input
                         type="text"

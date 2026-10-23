@@ -29,9 +29,8 @@ export const api = {
     request<OwnerProfile>('/api/auth/owner/login', { method: 'POST', body: JSON.stringify(credentials) }),
   registerOwner: (profile: Partial<OwnerProfile> & { password?: string }) =>
     request<OwnerProfile>('/api/auth/owner/register', { method: 'POST', body: JSON.stringify(profile) }),
-  getProfile: () => request<OwnerProfile>('/api/profile'),
-  updateProfile: (profile: Partial<OwnerProfile> & { password?: string }) => 
-    request<OwnerProfile>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),
+  updateProfile: (id: number, profile: Partial<OwnerProfile> & { password?: string }) => 
+    request<OwnerProfile>(`/api/profile/${id}`, { method: 'PUT', body: JSON.stringify(profile) }),
 
   // Customer Authentication & Profile
   loginCustomer: (credentials: { email?: string; mobile?: string; password?: string }) =>
@@ -40,7 +39,10 @@ export const api = {
     request<CustomerProfile>('/api/auth/customer/register', { method: 'POST', body: JSON.stringify(profile) }),
 
   // Products
-  getProducts: () => request<Product[]>('/api/products'),
+  // If ownerId passed: returns only that owner's products
+  // If no ownerId: returns all products of all owners (Customer view)
+  getProducts: (ownerId?: number) =>
+    request<Product[]>(ownerId ? `/api/products?ownerId=${ownerId}` : '/api/products'),
   getProduct: (id: number) => request<Product>(`/api/products/${id}`),
   createProduct: (product: Omit<Product, 'id'>) =>
     request<Product>('/api/products', { method: 'POST', body: JSON.stringify(product) }),
@@ -49,37 +51,41 @@ export const api = {
   deleteProduct: (id: number) =>
     request<{ success: boolean }>(`/api/products/${id}`, { method: 'DELETE' }),
 
-  // POS Invoices / Bills
-  getBills: () => request<Bill[]>('/api/bills'),
+  // POS Invoices / Bills (Scoped by ownerId)
+  getBills: (ownerId?: number) =>
+    request<Bill[]>(ownerId ? `/api/bills?ownerId=${ownerId}` : '/api/bills'),
   getBill: (id: number) => request<Bill>(`/api/bills/${id}`),
   createBill: (bill: Omit<Bill, 'id'>) =>
     request<Bill>('/api/bills', { method: 'POST', body: JSON.stringify(bill) }),
   deleteBill: (id: number) =>
     request<{ success: boolean }>(`/api/bills/${id}`, { method: 'DELETE' }),
 
-  // Customers CRM
-  getCustomers: () => request<CustomerRecord[]>('/api/customers'),
+  // Customers CRM (Scoped by ownerId)
+  getCustomers: (ownerId?: number) =>
+    request<CustomerRecord[]>(ownerId ? `/api/customers?ownerId=${ownerId}` : '/api/customers'),
   createCustomer: (customer: Omit<CustomerRecord, 'id'>) =>
     request<CustomerRecord>('/api/customers', { method: 'POST', body: JSON.stringify(customer) }),
   deleteCustomer: (id: number) =>
     request<{ success: boolean }>(`/api/customers/${id}`, { method: 'DELETE' }),
 
-  // Employees / Staff
-  getEmployees: () => request<Employee[]>('/api/employees'),
+  // Employees / Staff (Scoped by ownerId)
+  getEmployees: (ownerId?: number) =>
+    request<Employee[]>(ownerId ? `/api/employees?ownerId=${ownerId}` : '/api/employees'),
   createEmployee: (employee: Omit<Employee, 'id'>) =>
     request<Employee>('/api/employees', { method: 'POST', body: JSON.stringify(employee) }),
   deleteEmployee: (id: number) =>
     request<{ success: boolean }>(`/api/employees/${id}`, { method: 'DELETE' }),
 
   // Customer Shopping Orders
-  getOrders: () => request<OrderRecord[]>('/api/orders'),
+  getOrders: (params?: { ownerId?: number; customerMobile?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.ownerId) query.set('ownerId', String(params.ownerId));
+    if (params?.customerMobile) query.set('customerMobile', params.customerMobile);
+    const qs = query.toString();
+    return request<OrderRecord[]>(qs ? `/api/orders?${qs}` : '/api/orders');
+  },
   createOrder: (order: Partial<OrderRecord>) =>
     request<OrderRecord>('/api/orders', { method: 'POST', body: JSON.stringify(order) }),
-
-  // Backup & Restore
-  exportDatabase: () => request<any>('/api/backup'),
-  restoreDatabase: (data: any) =>
-    request<{ success: boolean }>('/api/restore', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export default api;

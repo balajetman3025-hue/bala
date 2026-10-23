@@ -74,7 +74,7 @@ interface AppContextType {
 
   // Database & Sync Status
   isBackendConnected: boolean;
-  syncWithBackend: () => Promise<void>;
+  syncWithBackend: (overrideOwnerId?: number, overrideRole?: AuthRole) => Promise<void>;
 
   // Utilities
   resetToDefaults: () => void;
@@ -90,8 +90,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [screenHistory, setScreenHistory] = useState<NavigationScreen[]>(['splash']);
 
   // Auth State
-  const [currentRole, setCurrentRole] = useState<AuthRole>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [currentRole, setCurrentRole] = useState<AuthRole>(() => {
+    return (localStorage.getItem('meridukan_role') as AuthRole) || null;
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('meridukan_logged_in') === 'true';
+  });
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
 
   // Data persistence with localStorage
@@ -141,32 +145,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orderQuantity, setOrderQuantity] = useState<number>(1);
 
   // Synchronize state with Backend SQL Database
-  const syncWithBackend = useCallback(async () => {
+  const syncWithBackend = useCallback(async (overrideOwnerId?: number, overrideRole?: AuthRole) => {
     try {
       await api.checkHealth();
       setIsBackendConnected(true);
 
-      const [pData, bData, cData, eData, oData, profData] = await Promise.allSettled([
-        api.getProducts(),
-        api.getBills(),
-        api.getCustomers(),
-        api.getEmployees(),
-        api.getOrders(),
-        api.getProfile(),
-      ]);
+      const activeRole = overrideRole !== undefined ? overrideRole : currentRole;
+      const activeOwnerId = overrideOwnerId !== undefined ? overrideOwnerId : ownerProfile.id;
 
-      if (pData.status === 'fulfilled') setProducts(pData.value || []);
-      if (bData.status === 'fulfilled') setBills(bData.value || []);
-      if (cData.status === 'fulfilled') setCustomers(cData.value || []);
-      if (eData.status === 'fulfilled') setEmployees(eData.value || []);
-      if (oData.status === 'fulfilled') setOrders(oData.value || []);
-      if (profData.status === 'fulfilled' && profData.value) setOwnerProfile(profData.value);
+      if (activeRole === 'owner' && activeOwnerId) {
+        // Point 1: Owner gets ONLY their own shop data
+        const [pData, bData, cData, eData, oData] = await Promise.allSettled([
+          api.getProducts(activeOwnerId),
+          api.getBills(activeOwnerId),
+          api.getCustomers(activeOwnerId),
+          api.getEmployees(activeOwnerId),
+          api.getOrders({ ownerId: activeOwnerId }),
+        ]);
+
+        if (pData.status === 'fulfilled') setProducts(pData.value || []);
+        if (bData.status === 'fulfilled') setBills(bData.value || []);
+        if (cData.status === 'fulfilled') setCustomers(cData.value || []);
+        if (eData.status === 'fulfilled') setEmployees(eData.value || []);
+        if (oData.status === 'fulfilled') setOrders(oData.value || []);
+      } else {
+        // Point 2: Customers see ALL products from ALL owners!
+        const [pData, oData] = await Promise.allSettled([
+          api.getProducts(), // no ownerId -> all marketplace items
+          api.getOrders(customerProfile.mobile ? { customerMobile: customerProfile.mobile } : undefined),
+        ]);
+
+        if (pData.status === 'fulfilled') setProducts(pData.value || []);
+        if (oData.status === 'fulfilled') setOrders(oData.value || []);
+      }
     } catch {
       setIsBackendConnected(false);
     }
-  }, []);
+  }, [currentRole, ownerProfile.id, customerProfile.mobile]);
 
-  // Fetch initial data on mount
+  // Sync on mount or when role/owner changes
   useEffect(() => {
     syncWithBackend();
   }, [syncWithBackend]);
@@ -199,6 +216,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('meridukan_orders', JSON.stringify(orders));
   }, [orders]);
+
+  useEffect(() => {
+    if (currentRole) {
+      localStorage.setItem('meridukan_role', currentRole);
+    } else {
+      localStorage.removeItem('meridukan_role');
+    }
+    localStorage.setItem('meridukan_logged_in', String(isLoggedIn));
+  }, [currentRole, isLoggedIn]);
 
   // Navigation handlers
   const navigateTo = (screen: NavigationScreen) => {
@@ -235,6 +261,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('owner');
       setIsLoggedIn(true);
       navigateTo('ownerDashboard');
+      // Fetch this owner's products & bills immediately
+      syncWithBackend(profile.id, 'owner');
     } catch (err) {
       throw err;
     }
@@ -247,6 +275,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('customer');
       setIsLoggedIn(true);
       navigateTo('customerDashboard');
+      // Fetch all products across all owners for this customer
+      syncWithBackend(undefined, 'customer');
     } catch (err) {
       throw err;
     }
@@ -258,6 +288,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setOwnerProfile(created);
       setCurrentRole('owner');
       setIsLoggedIn(true);
+      // New owner starts with fresh data
+      setProducts([]);
+      setBills([]);
+      setCustomers([]);
+      setEmployees([]);
+      setOrders([]);
       navigateTo('ownerDashboard');
     } catch (err) {
       throw err;
@@ -271,6 +307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('customer');
       setIsLoggedIn(true);
       navigateTo('customerDashboard');
+      syncWithBackend(undefined, 'customer');
     } catch (err) {
       throw err;
     }
@@ -279,7 +316,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateOwnerProfile = (profile: Partial<OwnerProfile> & { password?: string }) => {
     const updated = { ...ownerProfile, ...profile };
     setOwnerProfile(updated);
-    api.updateProfile(profile).catch(() => {});
+    if (ownerProfile.id) {
+      api.updateProfile(ownerProfile.id, profile).catch(() => {});
+    }
   };
 
   const logout = () => {
@@ -287,20 +326,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoggedIn(false);
     setSelectedProduct(null);
     setEditingProduct(null);
+    setProducts([]);
+    setBills([]);
+    setCustomers([]);
+    setEmployees([]);
+    setOrders([]);
     setScreenHistory(['choice']);
     setCurrentScreen('choice');
   };
 
-  // Product CRUD
+  // Product CRUD (Owner creates products scoped to their ownerId)
   const addProduct = (productData: Omit<Product, 'id'>) => {
     const tempId = Date.now();
     const newProduct: Product = {
       ...productData,
       id: tempId,
+      ownerId: ownerProfile.id,
+      storeName: ownerProfile.businessName,
     };
     setProducts((prev) => [newProduct, ...prev]);
 
-    api.createProduct(productData).then((saved) => {
+    api.createProduct({
+      ...productData,
+      ownerId: ownerProfile.id,
+    }).then((saved) => {
       setProducts((prev) => prev.map((p) => (p.id === tempId ? saved : p)));
     }).catch(() => {});
   };
@@ -325,18 +374,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return products.find((p) => p.id === id);
   };
 
-  // Bill CRUD
+  // Bill CRUD (Scoped to ownerId)
   const saveBill = (billData: Omit<Bill, 'id' | 'invoiceNumber'> & { invoiceNumber?: string }): Bill => {
     const id = Date.now();
     const invoiceNumber = billData.invoiceNumber || `INV-${new Date().getFullYear()}-${String(bills.length + 1).padStart(3, '0')}`;
     const newBill: Bill = {
       ...billData,
       id,
+      ownerId: ownerProfile.id,
       invoiceNumber,
     };
     setBills((prev) => [newBill, ...prev]);
 
-    // Update customer history or record locally
+    // Update customer history locally for this owner
     setCustomers((prev) => {
       const existing = prev.find((c) => c.mobile === billData.customerMobile);
       if (existing) {
@@ -353,6 +403,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         const newCust: CustomerRecord = {
           id: Date.now(),
+          ownerId: ownerProfile.id,
           name: billData.customerName,
           mobile: billData.customerMobile,
           address: billData.customerAddress,
@@ -377,9 +428,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Persist to backend SQL database
+    // Persist to backend SQL database with ownerId
     api.createBill({
       ...billData,
+      ownerId: ownerProfile.id,
       invoiceNumber,
     }).then((savedBill) => {
       setBills((prev) => prev.map((b) => (b.id === id ? savedBill : b)));
@@ -416,6 +468,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrderQuantity(1);
   };
 
+  // Point 4: Customer orders product -> owner sees customer!
   const placeOrder = (paymentMethod: string): OrderRecord => {
     if (!selectedProduct) {
       throw new Error('No product selected');
@@ -432,6 +485,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newOrder: OrderRecord = {
       id: tempId,
+      ownerId: selectedProduct.ownerId, // target owner who owns this product
       orderNumber: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: customerProfile.customerName || 'Customer',
       customerMobile: customerProfile.mobile || '',
@@ -458,7 +512,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Save to SQL backend
+    // Save to SQL backend (backend automatically links customer to this store owner in customers CRM)
     api.createOrder(newOrder).then((saved) => {
       setOrders((prev) => prev.map((o) => (o.id === tempId ? saved : o)));
     }).catch(() => {});
@@ -466,19 +520,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newOrder;
   };
 
-  // Customers & Employees
+  // Customers & Employees (Scoped to owner)
   const addCustomer = (data: Omit<CustomerRecord, 'id' | 'totalPurchases' | 'totalOrders' | 'lastVisited'>) => {
     const tempId = Date.now();
     const newCust: CustomerRecord = {
       ...data,
       id: tempId,
+      ownerId: ownerProfile.id,
       totalPurchases: 0,
       totalOrders: 0,
       lastVisited: new Date().toISOString().split('T')[0],
     };
     setCustomers((prev) => [newCust, ...prev]);
 
-    api.createCustomer(newCust).then((saved) => {
+    api.createCustomer({
+      ...newCust,
+      ownerId: ownerProfile.id,
+    }).then((saved) => {
       setCustomers((prev) => prev.map((c) => (c.id === tempId ? saved : c)));
     }).catch(() => {});
   };
@@ -493,11 +551,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newEmp: Employee = {
       ...empData,
       id: tempId,
+      ownerId: ownerProfile.id,
       joinDate: new Date().toISOString().split('T')[0],
     };
     setEmployees((prev) => [newEmp, ...prev]);
 
-    api.createEmployee(newEmp).then((saved) => {
+    api.createEmployee({
+      ...newEmp,
+      ownerId: ownerProfile.id,
+    }).then((saved) => {
       setEmployees((prev) => prev.map((e) => (e.id === tempId ? saved : e)));
     }).catch(() => {});
   };
@@ -519,32 +581,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const exportDatabaseJson = () => {
-    api.exportDatabase().then((serverData) => {
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(serverData, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', `meridukan_sql_backup_${new Date().toISOString().slice(0, 10)}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-    }).catch(() => {
-      const data = {
-        ownerProfile,
-        products,
-        bills,
-        customers,
-        employees,
-        orders,
-        exportedAt: new Date().toISOString(),
-      };
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', `meridukan_backup_${new Date().toISOString().slice(0, 10)}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-    });
+    const data = {
+      ownerProfile,
+      products,
+      bills,
+      customers,
+      employees,
+      orders,
+      exportedAt: new Date().toISOString(),
+    };
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `meridukan_backup_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const importDatabaseJson = (jsonString: string): boolean => {
@@ -556,8 +608,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (parsed.customers) setCustomers(parsed.customers);
       if (parsed.employees) setEmployees(parsed.employees);
       if (parsed.orders) setOrders(parsed.orders);
-
-      api.restoreDatabase(parsed).catch(() => {});
       return true;
     } catch (e) {
       console.error('Failed to import database', e);

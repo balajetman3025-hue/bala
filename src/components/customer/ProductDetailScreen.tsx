@@ -73,7 +73,7 @@ export const ProductDetailScreen: React.FC = () => {
             {/* Header info */}
             <div>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                <span>{selectedProduct.company}</span>
+                <span>{selectedProduct.storeName ? `Sold by: ${selectedProduct.storeName}` : selectedProduct.company}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading leading-tight">
                 {selectedProduct.productName}
@@ -93,66 +93,72 @@ export const ProductDetailScreen: React.FC = () => {
             )}
 
             {/* Specifications Matrix */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">Manufacturer / Brand</span>
-                <p className="font-bold text-slate-900 mt-0.5">{selectedProduct.company || 'N/A'}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Building className="w-3.5 h-3.5 text-slate-500" /> Merchant
+                </p>
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {selectedProduct.storeName || selectedProduct.company}
+                </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">Category</span>
-                <p className="font-bold text-slate-900 mt-0.5">{selectedProduct.category}</p>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Tag className="w-3.5 h-3.5 text-slate-500" /> Category
+                </p>
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {selectedProduct.category || 'General'}
+                </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">Barcode / EAN</span>
-                <p className="font-mono font-bold text-slate-900 mt-0.5">{selectedProduct.barcode || 'N/A'}</p>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Percent className="w-3.5 h-3.5 text-slate-500" /> GST Rate
+                </p>
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {selectedProduct.gst}% Tax Included
+                </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">Base Price</span>
-                <p className="font-bold text-slate-900 mt-0.5">₹{selectedProduct.sellingPrice.toFixed(2)}</p>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">GST Tax Rate</span>
-                <p className="font-bold text-indigo-600 mt-0.5">{selectedProduct.gst}%</p>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-400 font-medium">Stock Status</span>
-                <p className={`font-bold mt-0.5 ${inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
-                  {inStock ? `${selectedProduct.quantity} Available` : 'Out of Stock'}
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Layers className="w-3.5 h-3.5 text-slate-500" /> In Stock
+                </p>
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {selectedProduct.quantity} units
                 </p>
               </div>
             </div>
 
-            {/* Highlights */}
-            <div className="flex flex-wrap gap-4 text-xs text-slate-600 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>GST Tax Invoice Provided</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-4 h-4 text-indigo-600" />
-                <span>Doorstep Delivery Available</span>
-              </div>
-            </div>
-
-            {/* Sticky Action Footer */}
-            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            {/* Pricing Card */}
+            <div className="p-5 bg-emerald-50/70 border border-emerald-200/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <span className="text-xs text-slate-400 font-medium">Total (incl. {selectedProduct.gst}% GST):</span>
-                <p className="text-2xl font-extrabold text-slate-900 font-heading">
-                  ₹{totalWithTax.toFixed(2)}
-                </p>
+                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                  Price Payable (incl. taxes)
+                </span>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="text-3xl font-black text-slate-900 font-heading">
+                    ₹{totalWithTax.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    (₹{selectedProduct.sellingPrice} + ₹{estimatedTax.toFixed(2)} GST)
+                  </span>
+                </div>
               </div>
 
-              <button
-                onClick={handleBuyNow}
-                disabled={!inStock}
-                id="product-detail-buy-now-btn"
-                className="py-3.5 px-8 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl text-sm shadow-md shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>BUY NOW</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBuyNow}
+                  disabled={!inStock}
+                  id="product-detail-buy-btn"
+                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>{inStock ? 'Proceed to Order' : 'Out of Stock'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

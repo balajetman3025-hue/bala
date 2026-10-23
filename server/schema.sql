@@ -1,23 +1,24 @@
--- MERIDUKAN SQL Database Schema (Production - Clean without Demo Data)
+-- MERIDUKAN Multi-Owner SQL Database Schema
 
--- 1. Store Owner Profile & Authentication
+-- 1. Store Owners (Multiple owners supported, each has their own account & store data)
 CREATE TABLE IF NOT EXISTS owner_profile (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     ownerName TEXT NOT NULL,
     businessName TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    passwordHash TEXT,
     gstNumber TEXT,
     address TEXT,
     mobile TEXT,
-    email TEXT ,
     website TEXT,
     upi TEXT,
     bankAccount TEXT,
     ifsc TEXT,
-    passwordHash TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Customer Profiles & Authentication
+-- 2. Registered Customers
 CREATE TABLE IF NOT EXISTS customer_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customerName TEXT NOT NULL,
@@ -28,9 +29,10 @@ CREATE TABLE IF NOT EXISTS customer_profiles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Products
+-- 3. Products (Scoped to ownerId; customers see all products from all owners)
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId INTEGER REFERENCES owner_profile(id) ON DELETE CASCADE,
     productName TEXT NOT NULL,
     description TEXT,
     company TEXT,
@@ -45,9 +47,10 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Store Customers (CRM directory)
+-- 4. Store Customers CRM (Scoped to ownerId so owner sees only their buyers)
 CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId INTEGER REFERENCES owner_profile(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     mobile TEXT NOT NULL,
     address TEXT,
@@ -57,9 +60,10 @@ CREATE TABLE IF NOT EXISTS customers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Staff & Employees
+-- 5. Staff & Employees (Scoped to ownerId)
 CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerId INTEGER REFERENCES owner_profile(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
     mobile TEXT NOT NULL,
@@ -69,10 +73,11 @@ CREATE TABLE IF NOT EXISTS employees (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. POS Invoices / Bills
+-- 6. POS Invoices / Bills (Scoped to ownerId)
 CREATE TABLE IF NOT EXISTS bills (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoiceNumber TEXT UNIQUE NOT NULL,
+    ownerId INTEGER REFERENCES owner_profile(id) ON DELETE CASCADE,
+    invoiceNumber TEXT NOT NULL,
     customerName TEXT NOT NULL,
     customerMobile TEXT,
     customerAddress TEXT,
@@ -98,10 +103,11 @@ CREATE TABLE IF NOT EXISTS bill_items (
     FOREIGN KEY (billId) REFERENCES bills(id) ON DELETE CASCADE
 );
 
--- 8. Customer Online Orders
+-- 8. Customer Online Orders (Has ownerId so the store owner receives the order & customer details)
 CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     orderNumber TEXT UNIQUE NOT NULL,
+    ownerId INTEGER REFERENCES owner_profile(id),
     customerName TEXT NOT NULL,
     customerMobile TEXT NOT NULL,
     customerAddress TEXT NOT NULL,
@@ -119,9 +125,12 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create indexes for fast lookup
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_products_ownerId ON products(ownerId);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
-CREATE INDEX IF NOT EXISTS idx_bills_invoiceNumber ON bills(invoiceNumber);
+CREATE INDEX IF NOT EXISTS idx_bills_ownerId ON bills(ownerId);
+CREATE INDEX IF NOT EXISTS idx_customers_ownerId ON customers(ownerId);
+CREATE INDEX IF NOT EXISTS idx_employees_ownerId ON employees(ownerId);
+CREATE INDEX IF NOT EXISTS idx_orders_ownerId ON orders(ownerId);
 CREATE INDEX IF NOT EXISTS idx_orders_orderNumber ON orders(orderNumber);
 CREATE INDEX IF NOT EXISTS idx_bill_items_billId ON bill_items(billId);

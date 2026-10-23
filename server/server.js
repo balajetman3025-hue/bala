@@ -18,7 +18,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==========================================
-// 1. AUTHENTICATION & PASSWORDS (OWNER)
+// 1. OWNER AUTHENTICATION (MULTI-OWNER)
 // ==========================================
 app.post('/api/auth/owner/register', (req, res) => {
   try {
@@ -27,28 +27,35 @@ app.post('/api/auth/owner/register', (req, res) => {
       return res.status(400).json({ error: 'Owner name, business name, and email are required.' });
     }
 
+    // Check if an owner with this email already exists
+    const existing = db.prepare('SELECT id FROM owner_profile WHERE LOWER(email) = LOWER(?)').get(email);
+    if (existing) {
+      return res.status(409).json({ error: 'An owner account with this email already exists. Please log in.' });
+    }
+
     const passwordHash = password ? hashPassword(password) : null;
 
-    db.prepare(`
-      INSERT INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, passwordHash, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        ownerName = excluded.ownerName,
-        businessName = excluded.businessName,
-        gstNumber = excluded.gstNumber,
-        address = excluded.address,
-        mobile = excluded.mobile,
-        email = excluded.email,
-        website = excluded.website,
-        upi = excluded.upi,
-        bankAccount = excluded.bankAccount,
-        ifsc = excluded.ifsc,
-        passwordHash = COALESCE(excluded.passwordHash, owner_profile.passwordHash),
-        updated_at = CURRENT_TIMESTAMP
-    `).run(ownerName, businessName, gstNumber || '', address || '', mobile || '', email, website || '', upi || '', bankAccount || '', ifsc || '', passwordHash);
+    const stmt = db.prepare(`
+      INSERT INTO owner_profile (ownerName, businessName, email, passwordHash, gstNumber, address, mobile, website, upi, bankAccount, ifsc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-    const profile = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
-    res.status(201).json(profile);
+    const info = stmt.run(
+      ownerName,
+      businessName,
+      email,
+      passwordHash,
+      gstNumber || '',
+      address || '',
+      mobile || '',
+      website || '',
+      upi || '',
+      bankAccount || '',
+      ifsc || ''
+    );
+
+    const owner = db.prepare('SELECT id, ownerName, businessName, email, gstNumber, address, mobile, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = ?').get(Number(info.lastInsertRowid));
+    res.status(201).json(owner);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -61,12 +68,11 @@ app.post('/api/auth/owner/login', (req, res) => {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const owner = db.prepare('SELECT * FROM owner_profile WHERE email = ? OR id = 1').get(email);
+    const owner = db.prepare('SELECT * FROM owner_profile WHERE LOWER(email) = LOWER(?)').get(email);
     if (!owner) {
-      return res.status(401).json({ error: 'No owner profile registered. Please register first.' });
+      return res.status(401).json({ error: 'No owner account found with this email. Please register.' });
     }
 
-    // If an owner account has a passwordHash, verify it with timing-safe comparison
     if (owner.passwordHash) {
       const isValid = verifyPassword(password, owner.passwordHash);
       if (!isValid) {
@@ -74,7 +80,6 @@ app.post('/api/auth/owner/login', (req, res) => {
       }
     }
 
-    // Do not return passwordHash in the response
     const { passwordHash: _, ...safeProfile } = owner;
     res.json(safeProfile);
   } catch (err) {
@@ -82,8 +87,45 @@ app.post('/api/auth/owner/login', (req, res) => {
   }
 });
 
+// Update Owner Profile
+app.put('/api/profile/:id', (req, res) => {
+  try {
+    const ownerId = Number(req.params.id);
+    const { ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, password } = req.body;
+
+    const existing = db.prepare('SELECT * FROM owner_profile WHERE id = ?').get(ownerId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Owner profile not found.' });
+    }
+
+    const newHash = password ? hashPassword(password) : existing.passwordHash;
+
+    db.prepare(`
+      UPDATE owner_profile SET
+        ownerName = COALESCE(?, ownerName),
+        businessName = COALESCE(?, businessName),
+        gstNumber = COALESCE(?, gstNumber),
+        address = COALESCE(?, address),
+        mobile = COALESCE(?, mobile),
+        email = COALESCE(?, email),
+        website = COALESCE(?, website),
+        upi = COALESCE(?, upi),
+        bankAccount = COALESCE(?, bankAccount),
+        ifsc = COALESCE(?, ifsc),
+        passwordHash = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, newHash, ownerId);
+
+    const updated = db.prepare('SELECT id, ownerName, businessName, email, gstNumber, address, mobile, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = ?').get(ownerId);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==========================================
-// 2. AUTHENTICATION & PASSWORDS (CUSTOMER)
+// 2. CUSTOMER AUTHENTICATION
 // ==========================================
 app.post('/api/auth/customer/register', (req, res) => {
   try {
@@ -94,7 +136,7 @@ app.post('/api/auth/customer/register', (req, res) => {
 
     const existing = db.prepare('SELECT * FROM customer_profiles WHERE mobile = ? OR (email IS NOT NULL AND email = ?)').get(mobile, email || null);
     if (existing) {
-      return res.status(409).json({ error: 'An account with this mobile or email already exists.' });
+      return res.status(409).json({ error: 'An account with this mobile or email already exists. Please log in.' });
     }
 
     const passwordHash = password ? hashPassword(password) : null;
@@ -114,12 +156,12 @@ app.post('/api/auth/customer/register', (req, res) => {
 app.post('/api/auth/customer/login', (req, res) => {
   try {
     const { email, mobile, password } = req.body;
-    const identifier = email || mobile;
+    const identifier = (email || mobile || '').trim();
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Email/mobile and password are required.' });
     }
 
-    const customer = db.prepare('SELECT * FROM customer_profiles WHERE email = ? OR mobile = ?').get(identifier, identifier);
+    const customer = db.prepare('SELECT * FROM customer_profiles WHERE LOWER(email) = LOWER(?) OR mobile = ?').get(identifier, identifier);
     if (!customer) {
       return res.status(401).json({ error: 'Customer account not found. Please register.' });
     }
@@ -139,67 +181,32 @@ app.post('/api/auth/customer/login', (req, res) => {
 });
 
 // ==========================================
-// 3. OWNER PROFILE
-// ==========================================
-app.get('/api/profile', (req, res) => {
-  try {
-    const profile = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
-    if (!profile) {
-      return res.status(404).json({ error: 'Owner profile not found' });
-    }
-    res.json(profile);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/profile', (req, res) => {
-  try {
-    const { ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, password } = req.body;
-    const newHash = password ? hashPassword(password) : null;
-
-    db.prepare(`
-      INSERT INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, passwordHash, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        ownerName = excluded.ownerName,
-        businessName = excluded.businessName,
-        gstNumber = excluded.gstNumber,
-        address = excluded.address,
-        mobile = excluded.mobile,
-        email = excluded.email,
-        website = excluded.website,
-        upi = excluded.upi,
-        bankAccount = excluded.bankAccount,
-        ifsc = excluded.ifsc,
-        passwordHash = COALESCE(?, owner_profile.passwordHash),
-        updated_at = CURRENT_TIMESTAMP
-    `).run(ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc, newHash, newHash);
-
-    const updated = db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get();
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ==========================================
-// 4. PRODUCTS
+// 3. PRODUCTS
+// Point 1: Owner gets only their products (?ownerId=X)
+// Point 2: Customers see ALL products from ALL owners (no ownerId)
 // ==========================================
 app.get('/api/products', (req, res) => {
   try {
-    const products = db.prepare('SELECT * FROM products ORDER BY id DESC').all();
+    const { ownerId } = req.query;
+    let products;
+    if (ownerId) {
+      products = db.prepare(`
+        SELECT p.*, o.businessName as storeName 
+        FROM products p 
+        LEFT JOIN owner_profile o ON p.ownerId = o.id 
+        WHERE p.ownerId = ? 
+        ORDER BY p.id DESC
+      `).all(Number(ownerId));
+    } else {
+      // Customer view: see products across all store owners!
+      products = db.prepare(`
+        SELECT p.*, o.businessName as storeName 
+        FROM products p 
+        LEFT JOIN owner_profile o ON p.ownerId = o.id 
+        ORDER BY p.id DESC
+      `).all();
+    }
     res.json(products);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/products/:id', (req, res) => {
-  try {
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -207,12 +214,17 @@ app.get('/api/products/:id', (req, res) => {
 
 app.post('/api/products', (req, res) => {
   try {
-    const { productName, description, company, category, barcode, purchasePrice, sellingPrice, quantity, gst, image } = req.body;
+    const { ownerId, productName, description, company, category, barcode, purchasePrice, sellingPrice, quantity, gst, image } = req.body;
+    if (!productName) {
+      return res.status(400).json({ error: 'Product name is required.' });
+    }
+
     const stmt = db.prepare(`
-      INSERT INTO products (productName, description, company, category, barcode, purchasePrice, sellingPrice, quantity, gst, image)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (ownerId, productName, description, company, category, barcode, purchasePrice, sellingPrice, quantity, gst, image)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(
+      ownerId ? Number(ownerId) : null,
       productName,
       description || '',
       company || '',
@@ -224,7 +236,12 @@ app.post('/api/products', (req, res) => {
       Number(gst) || 0,
       image || ''
     );
-    const created = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(info.lastInsertRowid));
+    const created = db.prepare(`
+      SELECT p.*, o.businessName as storeName 
+      FROM products p 
+      LEFT JOIN owner_profile o ON p.ownerId = o.id 
+      WHERE p.id = ?
+    `).get(Number(info.lastInsertRowid));
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -263,7 +280,7 @@ app.put('/api/products/:id', (req, res) => {
       req.params.id
     );
     if (info.changes === 0) return res.status(404).json({ error: 'Product not found' });
-    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    const updated = db.prepare('SELECT p.*, o.businessName as storeName FROM products p LEFT JOIN owner_profile o ON p.ownerId = o.id WHERE p.id = ?').get(req.params.id);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -281,11 +298,17 @@ app.delete('/api/products/:id', (req, res) => {
 });
 
 // ==========================================
-// 5. BILLS & POS INVOICING
+// 4. POS BILLS & INVOICING (Scoped to Owner)
 // ==========================================
 app.get('/api/bills', (req, res) => {
   try {
-    const bills = db.prepare('SELECT * FROM bills ORDER BY id DESC').all();
+    const { ownerId } = req.query;
+    let bills;
+    if (ownerId) {
+      bills = db.prepare('SELECT * FROM bills WHERE ownerId = ? ORDER BY id DESC').all(Number(ownerId));
+    } else {
+      bills = db.prepare('SELECT * FROM bills ORDER BY id DESC').all();
+    }
     const getItems = db.prepare('SELECT * FROM bill_items WHERE billId = ?');
     const billsWithItems = bills.map(bill => ({
       ...bill,
@@ -297,20 +320,10 @@ app.get('/api/bills', (req, res) => {
   }
 });
 
-app.get('/api/bills/:id', (req, res) => {
-  try {
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
-    if (!bill) return res.status(404).json({ error: 'Bill not found' });
-    const items = db.prepare('SELECT * FROM bill_items WHERE billId = ?').all(bill.id);
-    res.json({ ...bill, items });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.post('/api/bills', (req, res) => {
   try {
     const {
+      ownerId,
       invoiceNumber,
       customerName,
       customerMobile,
@@ -325,14 +338,16 @@ app.post('/api/bills', (req, res) => {
     } = req.body;
 
     const generatedInv = invoiceNumber || `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    const actualOwnerId = ownerId ? Number(ownerId) : null;
 
     db.exec('BEGIN');
     try {
       const billStmt = db.prepare(`
-        INSERT INTO bills (invoiceNumber, customerName, customerMobile, customerAddress, date, time, subTotal, gstAmount, grandTotal, paymentMode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO bills (ownerId, invoiceNumber, customerName, customerMobile, customerAddress, date, time, subTotal, gstAmount, grandTotal, paymentMode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const billResult = billStmt.run(
+        actualOwnerId,
         generatedInv,
         customerName || 'Walk-in Customer',
         customerMobile || '',
@@ -371,9 +386,9 @@ app.post('/api/bills', (req, res) => {
         }
       }
 
-      // Update or create customer record
-      if (customerMobile) {
-        const existingCust = db.prepare('SELECT * FROM customers WHERE mobile = ?').get(customerMobile);
+      // Point 4: Automatically record customer in owner's CRM
+      if (customerMobile && actualOwnerId) {
+        const existingCust = db.prepare('SELECT * FROM customers WHERE mobile = ? AND ownerId = ?').get(customerMobile, actualOwnerId);
         if (existingCust) {
           db.prepare(`
             UPDATE customers SET
@@ -384,9 +399,9 @@ app.post('/api/bills', (req, res) => {
           `).run(Number(grandTotal) || 0, date || new Date().toISOString().split('T')[0], existingCust.id);
         } else {
           db.prepare(`
-            INSERT INTO customers (name, mobile, address, totalPurchases, totalOrders, lastVisited)
-            VALUES (?, ?, ?, ?, 1, ?)
-          `).run(customerName, customerMobile, customerAddress || '', Number(grandTotal) || 0, date || new Date().toISOString().split('T')[0]);
+            INSERT INTO customers (ownerId, name, mobile, address, totalPurchases, totalOrders, lastVisited)
+            VALUES (?, ?, ?, ?, ?, 1, ?)
+          `).run(actualOwnerId, customerName, customerMobile, customerAddress || '', Number(grandTotal) || 0, date || new Date().toISOString().split('T')[0]);
         }
       }
 
@@ -424,11 +439,18 @@ app.delete('/api/bills/:id', (req, res) => {
 });
 
 // ==========================================
-// 6. CUSTOMERS CRM
+// 5. CUSTOMERS CRM (Scoped to Owner)
+// Point 1 & Point 4: Owner can see customers who bought from their store!
 // ==========================================
 app.get('/api/customers', (req, res) => {
   try {
-    const customers = db.prepare('SELECT * FROM customers ORDER BY totalPurchases DESC').all();
+    const { ownerId } = req.query;
+    let customers;
+    if (ownerId) {
+      customers = db.prepare('SELECT * FROM customers WHERE ownerId = ? ORDER BY totalPurchases DESC').all(Number(ownerId));
+    } else {
+      customers = db.prepare('SELECT * FROM customers ORDER BY totalPurchases DESC').all();
+    }
     res.json(customers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -437,12 +459,13 @@ app.get('/api/customers', (req, res) => {
 
 app.post('/api/customers', (req, res) => {
   try {
-    const { name, mobile, address, totalPurchases, totalOrders, lastVisited } = req.body;
+    const { ownerId, name, mobile, address, totalPurchases, totalOrders, lastVisited } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO customers (name, mobile, address, totalPurchases, totalOrders, lastVisited)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (ownerId, name, mobile, address, totalPurchases, totalOrders, lastVisited)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(
+      ownerId ? Number(ownerId) : null,
       name,
       mobile,
       address || '',
@@ -468,11 +491,17 @@ app.delete('/api/customers/:id', (req, res) => {
 });
 
 // ==========================================
-// 7. EMPLOYEES
+// 6. EMPLOYEES / STAFF (Scoped to Owner)
 // ==========================================
 app.get('/api/employees', (req, res) => {
   try {
-    const employees = db.prepare('SELECT * FROM employees ORDER BY id ASC').all();
+    const { ownerId } = req.query;
+    let employees;
+    if (ownerId) {
+      employees = db.prepare('SELECT * FROM employees WHERE ownerId = ? ORDER BY id ASC').all(Number(ownerId));
+    } else {
+      employees = db.prepare('SELECT * FROM employees ORDER BY id ASC').all();
+    }
     res.json(employees);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -481,12 +510,13 @@ app.get('/api/employees', (req, res) => {
 
 app.post('/api/employees', (req, res) => {
   try {
-    const { name, role, mobile, salary, status, joinDate } = req.body;
+    const { ownerId, name, role, mobile, salary, status, joinDate } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO employees (name, role, mobile, salary, status, joinDate)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO employees (ownerId, name, role, mobile, salary, status, joinDate)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(
+      ownerId ? Number(ownerId) : null,
       name,
       role || 'Staff',
       mobile,
@@ -512,14 +542,27 @@ app.delete('/api/employees/:id', (req, res) => {
 });
 
 // ==========================================
-// 8. ONLINE CUSTOMER ORDERS
+// 7. ONLINE CUSTOMER ORDERS
+// Point 4: When customer buys an item from a store, the owner sees the customer!
 // ==========================================
 app.get('/api/orders', (req, res) => {
   try {
-    const orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
+    const { ownerId, customerMobile } = req.query;
+    let orders;
+    if (ownerId) {
+      // Store owner sees orders placed for their store
+      orders = db.prepare('SELECT * FROM orders WHERE ownerId = ? ORDER BY id DESC').all(Number(ownerId));
+    } else if (customerMobile) {
+      // Customer sees their own orders
+      orders = db.prepare('SELECT * FROM orders WHERE customerMobile = ? ORDER BY id DESC').all(customerMobile);
+    } else {
+      orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
+    }
+
     const formatted = orders.map(ord => ({
       id: ord.id,
       orderNumber: ord.orderNumber,
+      ownerId: ord.ownerId,
       customerName: ord.customerName,
       customerMobile: ord.customerMobile,
       customerAddress: ord.customerAddress,
@@ -548,10 +591,14 @@ app.post('/api/orders', (req, res) => {
   try {
     const {
       orderNumber,
+      ownerId,
       customerName,
       customerMobile,
       customerAddress,
       product,
+      productId,
+      productName,
+      productImage,
       quantity,
       totalAmount,
       gstAmount,
@@ -564,22 +611,34 @@ app.post('/api/orders', (req, res) => {
 
     const ordNum = orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const resolvedProductId = product?.id || productId || null;
+    const resolvedProductName = product?.productName || productName || 'Order Item';
+    const resolvedProductImage = product?.image || productImage || '';
+
+    // Resolve which owner owns this product
+    let targetOwnerId = ownerId || product?.ownerId || null;
+    if (!targetOwnerId && resolvedProductId) {
+      const prodInDb = db.prepare('SELECT ownerId FROM products WHERE id = ?').get(resolvedProductId);
+      if (prodInDb) targetOwnerId = prodInDb.ownerId;
+    }
+
     db.exec('BEGIN');
     try {
       const stmt = db.prepare(`
         INSERT INTO orders (
-          orderNumber, customerName, customerMobile, customerAddress, productId, productName, productImage, quantity, totalAmount, gstAmount, finalAmount, paymentMethod, paymentStatus, orderDate, orderTime
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          orderNumber, ownerId, customerName, customerMobile, customerAddress, productId, productName, productImage, quantity, totalAmount, gstAmount, finalAmount, paymentMethod, paymentStatus, orderDate, orderTime
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const info = stmt.run(
         ordNum,
-        customerName,
-        customerMobile,
-        customerAddress,
-        product?.id || null,
-        product?.productName || 'Order Item',
-        product?.image || '',
+        targetOwnerId,
+        customerName || 'Customer',
+        customerMobile || '',
+        customerAddress || '',
+        resolvedProductId,
+        resolvedProductName,
+        resolvedProductImage,
         Number(quantity) || 1,
         Number(totalAmount) || 0,
         Number(gstAmount) || 0,
@@ -591,8 +650,27 @@ app.post('/api/orders', (req, res) => {
       );
 
       // Decrement product inventory
-      if (product?.id) {
-        db.prepare('UPDATE products SET quantity = MAX(0, quantity - ?) WHERE id = ?').run(Number(quantity) || 1, product.id);
+      if (resolvedProductId) {
+        db.prepare('UPDATE products SET quantity = MAX(0, quantity - ?) WHERE id = ?').run(Number(quantity) || 1, resolvedProductId);
+      }
+
+      // Point 4: Automatically make this customer visible in the Store Owner's Customer CRM
+      if (customerMobile && targetOwnerId) {
+        const existingCust = db.prepare('SELECT * FROM customers WHERE mobile = ? AND ownerId = ?').get(customerMobile, targetOwnerId);
+        if (existingCust) {
+          db.prepare(`
+            UPDATE customers SET
+              totalPurchases = totalPurchases + ?,
+              totalOrders = totalOrders + 1,
+              lastVisited = ?
+            WHERE id = ?
+          `).run(Number(finalAmount) || 0, orderDate || new Date().toISOString().split('T')[0], existingCust.id);
+        } else {
+          db.prepare(`
+            INSERT INTO customers (ownerId, name, mobile, address, totalPurchases, totalOrders, lastVisited)
+            VALUES (?, ?, ?, ?, ?, 1, ?)
+          `).run(targetOwnerId, customerName || 'Online Customer', customerMobile, customerAddress || '', Number(finalAmount) || 0, orderDate || new Date().toISOString().split('T')[0]);
+        }
       }
 
       db.exec('COMMIT');
@@ -616,85 +694,6 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-// ==========================================
-// 9. DATABASE BACKUP & RESTORE (JSON)
-// ==========================================
-app.get('/api/backup', (req, res) => {
-  try {
-    const backup = {
-      ownerProfile: db.prepare('SELECT id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc FROM owner_profile WHERE id = 1').get(),
-      products: db.prepare('SELECT * FROM products').all(),
-      customers: db.prepare('SELECT * FROM customers').all(),
-      employees: db.prepare('SELECT * FROM employees').all(),
-      bills: db.prepare('SELECT * FROM bills').all(),
-      billItems: db.prepare('SELECT * FROM bill_items').all(),
-      orders: db.prepare('SELECT * FROM orders').all(),
-      exportedAt: new Date().toISOString()
-    };
-    res.json(backup);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/restore', (req, res) => {
-  try {
-    const data = req.body;
-    db.exec('BEGIN');
-    try {
-      if (data.ownerProfile) {
-        const p = data.ownerProfile;
-        db.prepare(`
-          INSERT OR REPLACE INTO owner_profile (id, ownerName, businessName, gstNumber, address, mobile, email, website, upi, bankAccount, ifsc)
-          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(p.ownerName, p.businessName, p.gstNumber, p.address, p.mobile, p.email, p.website, p.upi, p.bankAccount, p.ifsc);
-      }
-      if (Array.isArray(data.products)) {
-        db.prepare('DELETE FROM products').run();
-        const pStmt = db.prepare(`INSERT INTO products (id, productName, description, company, category, barcode, purchasePrice, sellingPrice, quantity, gst, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        for (const p of data.products) {
-          pStmt.run(p.id, p.productName, p.description, p.company, p.category, p.barcode, p.purchasePrice, p.sellingPrice, p.quantity, p.gst, p.image);
-        }
-      }
-      if (Array.isArray(data.customers)) {
-        db.prepare('DELETE FROM customers').run();
-        const cStmt = db.prepare(`INSERT INTO customers (id, name, mobile, address, totalPurchases, totalOrders, lastVisited) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-        for (const c of data.customers) {
-          cStmt.run(c.id, c.name, c.mobile, c.address, c.totalPurchases, c.totalOrders, c.lastVisited);
-        }
-      }
-      if (Array.isArray(data.employees)) {
-        db.prepare('DELETE FROM employees').run();
-        const eStmt = db.prepare(`INSERT INTO employees (id, name, role, mobile, salary, status, joinDate) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-        for (const e of data.employees) {
-          eStmt.run(e.id, e.name, e.role, e.mobile, e.salary, e.status, e.joinDate);
-        }
-      }
-      if (Array.isArray(data.bills)) {
-        db.prepare('DELETE FROM bill_items').run();
-        db.prepare('DELETE FROM bills').run();
-        const bStmt = db.prepare(`INSERT INTO bills (id, invoiceNumber, customerName, customerMobile, customerAddress, date, time, subTotal, gstAmount, grandTotal, paymentMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        for (const b of data.bills) {
-          bStmt.run(b.id, b.invoiceNumber, b.customerName, b.customerMobile, b.customerAddress, b.date, b.time, b.subTotal, b.gstAmount, b.grandTotal, b.paymentMode);
-        }
-      }
-      if (Array.isArray(data.billItems)) {
-        const biStmt = db.prepare(`INSERT INTO bill_items (id, billId, productId, productName, quantity, price, gstPercent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-        for (const bi of data.billItems) {
-          biStmt.run(bi.id, bi.billId, bi.productId, bi.productName, bi.quantity, bi.price, bi.gstPercent, bi.total);
-        }
-      }
-      db.exec('COMMIT');
-      res.json({ success: true, message: 'Database restored successfully' });
-    } catch (txErr) {
-      db.exec('ROLLBACK');
-      throw txErr;
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.listen(PORT, () => {
-  console.log(`MERIDUKAN Backend Server running on http://localhost:${PORT}`);
+  console.log(`MERIDUKAN Multi-Owner Backend Server running on http://localhost:${PORT}`);
 });

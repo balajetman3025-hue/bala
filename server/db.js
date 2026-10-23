@@ -9,12 +9,14 @@ const __dirname = path.dirname(__filename);
 const dbPath = path.join(__dirname, 'database.sqlite');
 const db = new DatabaseSync(dbPath);
 
-// Enable WAL mode and foreign key constraints
+// Prevent "database is locked" errors by setting busy_timeout and WAL mode
 try {
+  db.exec('PRAGMA busy_timeout = 5000;');
   db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA synchronous = NORMAL;');
   db.exec('PRAGMA foreign_keys = ON;');
 } catch (e) {
-  // Pragma failure is non-fatal
+  console.warn('Pragma configuration warning:', e.message);
 }
 
 // Automatically apply schema if needed
@@ -24,13 +26,23 @@ if (fs.existsSync(schemaPath)) {
   db.exec(schema);
 }
 
-// Ensure passwordHash columns exist (auto-migration)
-try {
-  db.exec('ALTER TABLE owner_profile ADD COLUMN passwordHash TEXT;');
-} catch (e) {}
+// Auto-migration columns for multi-owner support if upgrading existing DB
+const migrations = [
+  'ALTER TABLE products ADD COLUMN ownerId INTEGER REFERENCES owner_profile(id);',
+  'ALTER TABLE bills ADD COLUMN ownerId INTEGER REFERENCES owner_profile(id);',
+  'ALTER TABLE customers ADD COLUMN ownerId INTEGER REFERENCES owner_profile(id);',
+  'ALTER TABLE employees ADD COLUMN ownerId INTEGER REFERENCES owner_profile(id);',
+  'ALTER TABLE orders ADD COLUMN ownerId INTEGER REFERENCES owner_profile(id);',
+  'ALTER TABLE owner_profile ADD COLUMN passwordHash TEXT;',
+  'ALTER TABLE customer_profiles ADD COLUMN passwordHash TEXT;'
+];
 
-try {
-  db.exec('ALTER TABLE customer_profiles ADD COLUMN passwordHash TEXT;');
-} catch (e) {}
+for (const sql of migrations) {
+  try {
+    db.exec(sql);
+  } catch {
+    // Column already exists or table freshly created
+  }
+}
 
 export default db;

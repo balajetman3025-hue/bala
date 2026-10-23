@@ -16,6 +16,7 @@ export const CustomerProductScreen: React.FC = () => {
     const matchesSearch =
       p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.storeName && p.storeName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       p.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -29,8 +30,8 @@ export const CustomerProductScreen: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header
-        title="Store Products"
-        subtitle={`${products.length} items available`}
+        title="Marketplace Catalog"
+        subtitle={`${products.length} items available across all stores`}
         showBack={true}
         onBack={() => navigateTo('customerDashboard')}
       />
@@ -47,22 +48,19 @@ export const CustomerProductScreen: React.FC = () => {
               id="customer-product-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search groceries, snacks, brands, products..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
+              placeholder="Search products, flowers, groceries, stores..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-            <span className="text-slate-400 font-bold uppercase tracking-wider shrink-0 mr-1">
-              Category:
-            </span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-lg font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                   selectedCategory === cat
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -72,19 +70,15 @@ export const CustomerProductScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Products Grid */}
+        {/* Product Cards Grid */}
         {filteredProducts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
-              <Package className="w-8 h-8" />
+          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3 shadow-xs">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 mx-auto flex items-center justify-center">
+              <AlertCircle className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 font-heading">
-              No products found
-            </h3>
+            <h3 className="text-base font-bold text-slate-900">No products found</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              {searchTerm
-                ? `No items found matching "${searchTerm}". Try a different keyword.`
-                : 'No products are currently available in this category.'}
+              No products found matching "{searchTerm}". Try clearing your filters.
             </p>
           </div>
         ) : (
@@ -124,8 +118,8 @@ export const CustomerProductScreen: React.FC = () => {
 
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                     <div>
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        {product.company}
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                        {product.storeName ? `Sold by: ${product.storeName}` : product.company}
                       </p>
                       <h3 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-emerald-700 transition-colors line-clamp-2 mt-0.5">
                         {product.productName}

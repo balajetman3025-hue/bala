@@ -6,10 +6,8 @@ import {
   ShoppingBag,
   Package,
   Calendar,
-  CreditCard,
   Printer,
   X,
-  Store,
   CheckCircle2,
   ArrowRight,
 } from 'lucide-react';
@@ -51,7 +49,7 @@ export const CustomerOrdersScreen: React.FC = () => {
               No orders placed yet
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              You haven't made any purchases from {ownerProfile.businessName} yet. Browse our catalog to place your first order.
+              You haven't made any purchases yet. Browse the marketplace catalog to place your first order.
             </p>
             <button
               onClick={() => navigateTo('customerProducts')}
@@ -93,6 +91,11 @@ export const CustomerOrdersScreen: React.FC = () => {
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
                         <CheckCircle2 className="w-3 h-3" /> {order.paymentStatus}
                       </span>
+                      {order.product.storeName && (
+                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                          Store: {order.product.storeName}
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="text-base font-bold text-slate-900 font-heading leading-snug">
@@ -158,12 +161,9 @@ export const CustomerOrdersScreen: React.FC = () => {
 
             <div className="text-center pb-4 border-b border-slate-200">
               <h2 className="text-xl font-extrabold font-heading text-slate-900">
-                {ownerProfile.businessName}
+                {selectedOrderReceipt.product.storeName || ownerProfile.businessName || 'Verified Merchant Store'}
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">{ownerProfile.address}</p>
-              <p className="text-xs text-slate-600 mt-1 font-mono">
-                GSTIN: {ownerProfile.gstNumber || '09AAECR1234F1Z8'} • Phone: {ownerProfile.mobile}
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">Official Tax Receipt & Order Summary</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
@@ -195,36 +195,40 @@ export const CustomerOrdersScreen: React.FC = () => {
                     <th className="p-2.5 text-right">Total</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   <tr>
                     <td className="p-2.5 font-medium text-slate-900">
                       {selectedOrderReceipt.product.productName}
                     </td>
-                    <td className="p-2.5 text-center font-bold">{selectedOrderReceipt.quantity}</td>
-                    <td className="p-2.5 text-right">₹{selectedOrderReceipt.product.sellingPrice}</td>
-                    <td className="p-2.5 text-right font-bold">₹{selectedOrderReceipt.totalAmount.toFixed(2)}</td>
+                    <td className="p-2.5 text-center text-slate-600">
+                      {selectedOrderReceipt.quantity}
+                    </td>
+                    <td className="p-2.5 text-right text-slate-600">
+                      ₹{(selectedOrderReceipt.totalAmount / selectedOrderReceipt.quantity).toFixed(2)}
+                    </td>
+                    <td className="p-2.5 text-right font-bold text-slate-900">
+                      ₹{selectedOrderReceipt.totalAmount.toFixed(2)}
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            <div className="space-y-1.5 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div className="space-y-1.5 text-xs">
               <div className="flex justify-between text-slate-600">
-                <span>Subtotal:</span>
+                <span>Sub Total:</span>
                 <span>₹{selectedOrderReceipt.totalAmount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>GST Tax ({selectedOrderReceipt.product.gst}%):</span>
+                <span>GST Tax:</span>
                 <span>₹{selectedOrderReceipt.gstAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200 font-heading">
-                <span>Grand Total Paid:</span>
-                <span className="text-emerald-700">₹{selectedOrderReceipt.finalAmount.toFixed(2)}</span>
+              <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-2 border-t border-slate-200">
+                <span>Total Amount Paid:</span>
+                <span className="text-emerald-700 font-heading">
+                  ₹{selectedOrderReceipt.finalAmount.toFixed(2)}
+                </span>
               </div>
-            </div>
-
-            <div className="text-center text-[11px] text-slate-400">
-              Thank you for supporting {ownerProfile.businessName}!
             </div>
           </div>
         </div>
