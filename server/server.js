@@ -12,9 +12,93 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// In-memory verification OTP store for Email Verification
+// Map<lowercaseEmail, { code: string, expiresAt: number, verified: boolean }>
+const verificationCodes = new Map();
+
+// Helper to clean expired OTPs
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, entry] of verificationCodes.entries()) {
+    if (entry.expiresAt < now) {
+      verificationCodes.delete(email);
+    }
+  }
+}, 60000);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'MERIDUKAN Backend API', time: new Date().toISOString() });
+});
+
+// ==========================================
+// 0. EMAIL VERIFICATION OTP ENDPOINTS
+// ==========================================
+app.post('/api/auth/send-verification-otp', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+
+    verificationCodes.set(normalizedEmail, {
+      code,
+      expiresAt,
+      verified: false
+    });
+
+    console.log(`\n========================================`);
+    console.log(`✉️ [EMAIL VERIFICATION CODE]`);
+    console.log(`To: ${normalizedEmail}`);
+    console.log(`Code: ${code}`);
+    console.log(`Expires in: 10 minutes`);
+    console.log(`========================================\n`);
+
+    res.json({
+      success: true,
+      message: `Verification code sent to ${normalizedEmail}`,
+      code: code
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and verification code are required.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const entry = verificationCodes.get(normalizedEmail);
+
+    if (!entry) {
+      return res.status(400).json({ error: 'No verification code found for this email. Please request a new code.' });
+    }
+
+    if (Date.now() > entry.expiresAt) {
+      verificationCodes.delete(normalizedEmail);
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+    }
+
+    if (entry.code !== String(code).trim()) {
+      return res.status(400).json({ error: 'Incorrect verification code. Please check and try again.' });
+    }
+
+    entry.verified = true;
+    res.json({
+      success: true,
+      message: 'Email verified successfully!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================================
