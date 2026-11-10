@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}
-            title={isBackendConnected ? 'Connected to SQLite database via Express backend' : 'Backend offline - Local cache active'}
+            title={isBackendConnected ? 'Connected to SQL Database (Supabase Cloud / SQLite)' : 'Database offline'}
           >
             <span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
             <Database className="w-3 h-3" />
