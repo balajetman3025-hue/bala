@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Building2, User, Phone, Mail, MapPin, FileText, Lock, ArrowLeft, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
-import { EmailVerificationModal } from './EmailVerificationModal';
-import { api } from '../../api';
+import { supabase } from '../../supabaseClient';
 
 export const OwnerRegistrationScreen: React.FC = () => {
   const { navigateTo, registerOwner } = useApp();
@@ -20,12 +19,31 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [devCode, setDevCode] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  async function handleSignup(email: string, password: string) {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+
+      options: {
+        emailRedirectTo: window.location.origin
+      }
+    });
+
+    if (error) {
+      alert(error.message);
+      return false;
+    }
+
+    alert(
+      "Registration successful! Please check your email and verify your account."
+    );
+    return true;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,30 +63,30 @@ export const OwnerRegistrationScreen: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      // Step 1: Send verification code to email
-      const res = await api.sendVerificationOtp(formData.email.trim());
-      if (res.code) {
-        setDevCode(res.code);
+      const success = await handleSignup(formData.email.trim(), formData.password);
+      if (success) {
+        // Record profile in database
+        try {
+          await registerOwner({
+            ownerName: formData.ownerName.trim(),
+            businessName: formData.businessName.trim(),
+            gstNumber: formData.gstNumber || 'Unregistered',
+            address: formData.address,
+            mobile: formData.mobile,
+            email: formData.email.trim(),
+            password: formData.password,
+          });
+        } catch {
+          // Handled gracefully
+        }
+        navigateTo('ownerLogin');
       }
-      setShowVerifyModal(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send verification code.');
+      alert(err.message || 'Registration failed.');
+      setError(err.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleVerifiedRegistration = async () => {
-    await registerOwner({
-      ownerName: formData.ownerName.trim(),
-      businessName: formData.businessName.trim(),
-      gstNumber: formData.gstNumber || 'Unregistered',
-      address: formData.address,
-      mobile: formData.mobile,
-      email: formData.email.trim(),
-      password: formData.password,
-    });
-    setShowVerifyModal(false);
   };
 
   return (
@@ -213,7 +231,7 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Login Email Address * (Email Verification Required)
+                Login Email Address *
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -285,12 +303,12 @@ export const OwnerRegistrationScreen: React.FC = () => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Sending Verification Code...</span>
+                  <span>Registering...</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Verify Email & Complete Registration</span>
+                  <span>Register & Send Verification Email</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -311,15 +329,6 @@ export const OwnerRegistrationScreen: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Email Verification OTP Modal */}
-      <EmailVerificationModal
-        isOpen={showVerifyModal}
-        email={formData.email}
-        initialCode={devCode}
-        onClose={() => setShowVerifyModal(false)}
-        onVerified={handleVerifiedRegistration}
-      />
     </div>
   );
 };

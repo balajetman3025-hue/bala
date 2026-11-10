@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Mail, Lock, Eye, EyeOff, User, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 export const CustomerLoginScreen: React.FC = () => {
   const { navigateTo, loginAsCustomer } = useApp();
@@ -14,14 +15,42 @@ export const CustomerLoginScreen: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError('Please enter your email/mobile and password.');
+      setError('Please enter your email and password.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await loginAsCustomer(email.trim(), password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      });
+
+      if (error) {
+        alert(error.message);
+        setError(error.message);
+        return;
+      }
+
+      if (!data.user?.email_confirmed_at) {
+        alert("Please verify your email first.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Save role and login state
+      localStorage.setItem('meridukan_role', 'customer');
+      localStorage.setItem('meridukan_logged_in', 'true');
+      try {
+        await loginAsCustomer(email.trim(), password);
+      } catch {
+        // AppContext state fallback
+      }
+
+      // Redirect to dashboard
+      window.location.href = "/dashboard";
     } catch (err: any) {
+      alert(err.message || 'Login failed.');
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -60,7 +89,7 @@ export const CustomerLoginScreen: React.FC = () => {
                 Customer Login
               </h2>
               <p className="text-xs text-slate-500">
-                Log in to browse products and place orders
+                Sign in to view orders & purchase products
               </p>
             </div>
           </div>
@@ -73,26 +102,26 @@ export const CustomerLoginScreen: React.FC = () => {
 
           {forgotSent && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-medium">
-              Password reset link sent to <strong>{email}</strong>.
+              Password reset link sent to <strong>{email}</strong>. Check your inbox.
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Email Address or Mobile Number
+                Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
-                  type="text"
+                  type="email"
                   id="customer-login-email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@example.com or mobile"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  placeholder="name@example.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
                   required
                 />
               </div>
@@ -112,7 +141,7 @@ export const CustomerLoginScreen: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
                   required
                 />
                 <button
@@ -164,7 +193,7 @@ export const CustomerLoginScreen: React.FC = () => {
                 id="customer-create-account-link"
                 className="font-bold text-emerald-600 hover:text-emerald-800 underline-offset-2 hover:underline cursor-pointer"
               >
-                Create Account
+                Create New Account
               </button>
             </p>
           </div>

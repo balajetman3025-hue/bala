@@ -86,8 +86,22 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Navigation
-  const [currentScreen, setCurrentScreen] = useState<NavigationScreen>('splash');
-  const [screenHistory, setScreenHistory] = useState<NavigationScreen[]>(['splash']);
+  const [currentScreen, setCurrentScreen] = useState<NavigationScreen>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard')) {
+      const role = localStorage.getItem('meridukan_role');
+      if (role === 'customer') return 'customerDashboard';
+      return 'ownerDashboard';
+    }
+    return 'splash';
+  });
+  const [screenHistory, setScreenHistory] = useState<NavigationScreen[]>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard')) {
+      const role = localStorage.getItem('meridukan_role');
+      if (role === 'customer') return ['customerDashboard'];
+      return ['ownerDashboard'];
+    }
+    return ['splash'];
+  });
 
   // Auth State
   const [currentRole, setCurrentRole] = useState<AuthRole>(() => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Mail, Lock, Eye, EyeOff, Building2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 export const OwnerLoginScreen: React.FC = () => {
   const { navigateTo, loginAsOwner } = useApp();
@@ -20,8 +21,36 @@ export const OwnerLoginScreen: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      await loginAsOwner(email.trim(), password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      });
+
+      if (error) {
+        alert(error.message);
+        setError(error.message);
+        return;
+      }
+
+      if (!data.user?.email_confirmed_at) {
+        alert("Please verify your email first.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Save role and login state
+      localStorage.setItem('meridukan_role', 'owner');
+      localStorage.setItem('meridukan_logged_in', 'true');
+      try {
+        await loginAsOwner(email.trim(), password);
+      } catch {
+        // AppContext state fallback
+      }
+
+      // Redirect to dashboard
+      window.location.href = "/dashboard";
     } catch (err: any) {
+      alert(err.message || 'Login failed.');
       setError(err.message || 'Login failed. Invalid email or password.');
     } finally {
       setLoading(false);

@@ -4,14 +4,18 @@ import { Store, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const SplashScreen: React.FC = () => {
-  const { navigateTo } = useApp();
+  const { navigateTo, isLoggedIn, currentRole } = useApp();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigateTo('choice');
-    }, 2000);
+      if (isLoggedIn || (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard'))) {
+        navigateTo(currentRole === 'customer' ? 'customerDashboard' : 'ownerDashboard');
+      } else {
+        navigateTo('choice');
+      }
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [navigateTo]);
+  }, [navigateTo, isLoggedIn, currentRole]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -43,7 +47,13 @@ export const SplashScreen: React.FC = () => {
         </div>
 
         <button
-          onClick={() => navigateTo('choice')}
+          onClick={() => {
+            if (isLoggedIn) {
+              navigateTo(currentRole === 'customer' ? 'customerDashboard' : 'ownerDashboard');
+            } else {
+              navigateTo('choice');
+            }
+          }}
           id="splash-skip-btn"
           className="inline-flex items-center gap-2 text-xs text-indigo-300 hover:text-white transition-colors underline-offset-4 hover:underline cursor-pointer"
         >
