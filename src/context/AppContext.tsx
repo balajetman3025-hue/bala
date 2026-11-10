@@ -168,7 +168,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const activeOwnerId = overrideOwnerId !== undefined ? overrideOwnerId : ownerProfile.id;
 
       if (activeRole === 'owner' && activeOwnerId) {
-        // Point 1: Owner gets ONLY their own shop data
+        if (ownerProfile.email && ownerProfile.ownerName) {
+          api.registerOwner(ownerProfile).catch(() => {});
+        }
         const [pData, bData, cData, eData, oData] = await Promise.allSettled([
           api.getProducts(activeOwnerId),
           api.getBills(activeOwnerId),
@@ -183,9 +185,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (eData.status === 'fulfilled') setEmployees(eData.value || []);
         if (oData.status === 'fulfilled') setOrders(oData.value || []);
       } else {
-        // Point 2: Customers see ALL products from ALL owners!
+        if (customerProfile.mobile && customerProfile.customerName) {
+          api.registerCustomer(customerProfile).catch(() => {});
+        }
         const [pData, oData] = await Promise.allSettled([
-          api.getProducts(), // no ownerId -> all marketplace items
+          api.getProducts(),
           api.getOrders(customerProfile.mobile ? { customerMobile: customerProfile.mobile } : undefined),
         ]);
 

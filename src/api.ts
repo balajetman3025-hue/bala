@@ -205,7 +205,7 @@ export const api = {
       try {
         const { data: created } = await supabase
           .from('owner_profile')
-          .insert([{
+          .upsert([{
             owner_name: profile.ownerName,
             business_name: profile.businessName,
             email: profile.email,
@@ -215,8 +215,9 @@ export const api = {
             website: profile.website || '',
             upi: profile.upi || '',
             bank_account: profile.bankAccount || '',
-            ifsc: profile.ifsc || ''
-          }])
+            ifsc: profile.ifsc || '',
+            is_verified: true,
+          }], { onConflict: 'email' })
           .select()
           .single();
         if (created) return created as unknown as OwnerProfile;
@@ -273,14 +274,15 @@ export const api = {
   registerCustomer: async (profile: Partial<CustomerProfile> & { password?: string }) => {
     if (isSupabaseConfigured && supabase && (profile.email || profile.mobile)) {
       try {
-        await supabase.from('customer_profiles').insert([{
+        await supabase.from('customer_profiles').upsert([{
           customer_name: profile.customerName,
           mobile: profile.mobile || '',
           email: profile.email || '',
           address: profile.address || '',
-        }]);
-      } catch {
-        // Ignore duplicate or schema mismatch
+          is_verified: true,
+        }], { onConflict: 'mobile' });
+      } catch (err) {
+        console.warn('Customer upsert error:', err);
       }
     }
     try {
