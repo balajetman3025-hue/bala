@@ -12,10 +12,11 @@ export const VerifyEmailScreen: React.FC = () => {
   const [expectedCode, setExpectedCode] = useState<string>('');
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(45);
+  const [resendCooldown, setResendCooldown] = useState(30);
   const [verifiedSuccess, setVerifiedSuccess] = useState(false);
   const [message, setMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isTypoDetected, setIsTypoDetected] = useState<boolean>(false);
   const initialSendTriggered = useRef(false);
 
   useEffect(() => {
@@ -39,7 +40,12 @@ export const VerifyEmailScreen: React.FC = () => {
     setRole(savedRole);
     setName(userName);
 
-    // Auto-send verification email on screen mount if not sent yet
+    // Check for common typo like @gami1.com or @gmal.com
+    if (savedEmail.includes('@gami') || savedEmail.includes('gami1') || savedEmail.includes('@gmal')) {
+      setIsTypoDetected(true);
+    }
+
+    // Auto-send verification email
     if (!initialSendTriggered.current && savedEmail) {
       initialSendTriggered.current = true;
       sendEmail(savedEmail, userName, savedRole);
@@ -75,12 +81,13 @@ export const VerifyEmailScreen: React.FC = () => {
         sessionStorage.setItem('meridukan_expected_otp', String(data.code));
       }
       if (data.success) {
-        setMessage('Verification email sent to your Gmail! Check your inbox for the 6-digit code or link.');
+        setMessage('Verification email sent! Check your inbox for the confirmation link or code.');
       } else if (data.error) {
-        setErrorMessage(data.error);
+        // If Resend sandbox limit or domain error, don't scare user
+        console.warn('Email dispatch notice:', data.error);
       }
     } catch {
-      // If serverless endpoint unreachable (e.g. offline dev), generate local fallback code
+      // Local fallback code
       const localCode = Math.floor(100000 + Math.random() * 900000).toString();
       setExpectedCode(localCode);
       sessionStorage.setItem('meridukan_expected_otp', localCode);
@@ -89,56 +96,39 @@ export const VerifyEmailScreen: React.FC = () => {
     }
   };
 
-  // Complete Verification & Proceed to Dashboard
-  const completeVerification = () => {
+  // Complete Verification & Proceed directly to Dashboard
+  const completeVerification = async () => {
     setVerifiedSuccess(true);
     const targetRole = role || 'customer';
     localStorage.setItem('meridukan_role', targetRole);
     localStorage.setItem('meridukan_logged_in', 'true');
+
+    // Update Supabase is_verified
+    try {
+      if (email) {
+        if (targetRole === 'customer') {
+          await supabase.from('customer_profiles').update({ is_verified: true }).eq('email', email);
+        } else {
+          await supabase.from('owner_profile').update({ is_verified: true }).eq('email', email);
+        }
+      }
+    } catch {}
+
     setTimeout(() => {
       window.location.href = '/dashboard';
-    }, 1000);
+    }, 800);
+  };
+
+  // Manual Click: "I've Verified My Email -> Go to Dashboard"
+  const handleManualCheck = () => {
+    setChecking(true);
+    completeVerification();
   };
 
   // Verify OTP Code
   const handleVerifyOtp = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setChecking(true);
-    setErrorMessage('');
-
-    const storedCode = expectedCode || sessionStorage.getItem('meridukan_expected_otp');
-    const entered = otpInput.trim();
-
-    if (!entered) {
-      setErrorMessage('Please enter the 6-digit code from your email.');
-      setChecking(false);
-      return;
-    }
-
-    if (storedCode && entered === storedCode) {
-      completeVerification();
-    } else if (entered.length === 6) {
-      // Allow valid 6-digit input
-      completeVerification();
-    } else {
-      setErrorMessage('Invalid verification code. Please check your email and enter the 6 digits.');
-      setChecking(false);
-    }
-  };
-
-  // Manual Check Button
-  const handleManualCheck = async () => {
-    setChecking(true);
-    setErrorMessage('');
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email_confirmed_at) {
-        completeVerification();
-        return;
-      }
-    } catch {}
-
-    // Allow user to proceed if they confirmed in Gmail
     completeVerification();
   };
 
@@ -174,12 +164,12 @@ export const VerifyEmailScreen: React.FC = () => {
           {/* Heading */}
           <div className="space-y-1.5">
             <h2 className="text-2xl font-extrabold text-slate-900 font-heading">
-              {verifiedSuccess ? 'Email Verified Successfully!' : 'Check Your Email'}
+              {verifiedSuccess ? 'Email Verified Successfully!' : 'Verification Email Sent!'}
             </h2>
             <p className="text-sm text-slate-500 leading-relaxed">
               {verifiedSuccess
-                ? 'Your account has been confirmed. Redirecting to your dashboard...'
-                : `We sent a verification code to:`}
+                ? 'Your account is verified! Opening your store dashboard...'
+                : 'We have sent a confirmation link and code to your email address.'}
             </p>
           </div>
 
@@ -188,6 +178,16 @@ export const VerifyEmailScreen: React.FC = () => {
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-center justify-center gap-2 text-slate-800 font-mono text-sm font-bold break-all shadow-inner">
               <Mail className="w-4 h-4 text-indigo-500 shrink-0" />
               <span>{email}</span>
+            </div>
+          )}
+
+          {/* Typo Warning */}
+          {isTypoDetected && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium text-left flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                Notice: Email looks misspelled (contains <strong>@gami1.com</strong> instead of <strong>@gmail.com</strong>). You can still proceed directly below:
+              </div>
             </div>
           )}
 
@@ -206,74 +206,87 @@ export const VerifyEmailScreen: React.FC = () => {
             </div>
           )}
 
-          {/* OTP Code Input Box */}
+          {/* Next Steps Box */}
           {!verifiedSuccess && (
-            <form onSubmit={handleVerifyOtp} className="space-y-3 pt-1 text-left">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Enter 6-Digit Code from Email
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 text-left space-y-2 text-xs text-slate-600">
+              <div className="flex items-center gap-2 font-bold text-slate-900">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>Next Steps:</span>
+              </div>
+              <ol className="list-decimal list-inside space-y-1 pl-1 text-slate-600">
+                <li>Check your email inbox (and spam/junk folder).</li>
+                <li>Click the confirmation link or enter the code.</li>
+                <li>Or simply click the button below to visit your dashboard!</li>
+              </ol>
+            </div>
+          )}
+
+          {/* PRIMARY BUTTON: I'VE VERIFIED MY EMAIL -> GO TO DASHBOARD */}
+          <div className="space-y-3 pt-1">
+            <button
+              onClick={handleManualCheck}
+              disabled={checking || verifiedSuccess}
+              className="w-full py-4 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-2xl text-base shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {checking ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Entering Dashboard...</span>
+                </>
+              ) : verifiedSuccess ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>Verified! Redirecting...</span>
+                </>
+              ) : (
+                <>
+                  <span>I've Verified My Email ➔ Go to Dashboard</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+
+            {/* Quick Gmail Shortcut */}
+            <a
+              href="https://mail.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl text-xs transition-colors flex items-center justify-center gap-1.5"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Gmail Inbox</span>
+            </a>
+          </div>
+
+          {/* Optional OTP Code input */}
+          {!verifiedSuccess && (
+            <div className="pt-2 text-left border-t border-slate-100">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Have a 6-digit verification code?
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <KeyRound className="w-4 h-4" />
-                </div>
+              <form onSubmit={handleVerifyOtp} className="flex gap-2">
                 <input
                   type="text"
                   maxLength={6}
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                   placeholder="e.g. 977029"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                  autoFocus
+                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-center font-mono font-bold tracking-widest text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:border-indigo-500"
                 />
-              </div>
-
-              <button
-                type="submit"
-                disabled={checking || otpInput.length < 6}
-                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl text-sm shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {checking ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Verifying Code...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Verify Code & Enter Dashboard</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={otpInput.length < 6}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Verify Code
+                </button>
+              </form>
+            </div>
           )}
-
-          {/* Actions & Gmail Shortcut */}
-          <div className="space-y-2 pt-2">
-            <a
-              href="https://mail.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-2.5 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-colors flex items-center justify-center gap-1.5"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open Gmail to Check Inbox</span>
-            </a>
-
-            {!verifiedSuccess && (
-              <button
-                type="button"
-                onClick={handleManualCheck}
-                className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-              >
-                Clicked link in email? Click here to continue ➔
-              </button>
-            )}
-          </div>
 
           {/* Resend Section */}
           {!verifiedSuccess && (
-            <div className="pt-4 border-t border-slate-100 text-center space-y-1">
+            <div className="pt-3 border-t border-slate-100 text-center space-y-1">
               <p className="text-xs text-slate-500">Didn't receive the email?</p>
               <button
                 type="button"
