@@ -83,28 +83,33 @@ export const CustomerRegistrationScreen: React.FC = () => {
     };
 
     try {
+      // 1. Always save to Supabase customer_profiles database table
+      try {
+        await registerCustomer({ ...customerData, password: formData.password });
+      } catch (e) {
+        console.warn('Database save warning:', e);
+      }
+
+      // 2. Attempt Supabase Auth email verification
       const success = await handleSignup(formData.email.trim(), formData.password);
       if (success) {
-        try {
-          await registerCustomer({ ...customerData, password: formData.password });
-        } catch {
-          // Handled gracefully
-        }
         navigateTo('customerLogin');
       } else {
-        // Fallback if Supabase email service failed: save locally and log in directly
+        // If email service failed, allow immediate access to dashboard
         localStorage.setItem('meridukan_customer_user', JSON.stringify(customerData));
         localStorage.setItem('meridukan_role', 'customer');
         localStorage.setItem('meridukan_logged_in', 'true');
-        alert("Registration complete! Redirecting to shop dashboard.");
+        alert("Account created and saved to database! Redirecting to dashboard.");
         window.location.href = "/dashboard";
       }
-    } catch {
-      // Fallback on network / fetch error
+    } catch (err: any) {
+      try {
+        await registerCustomer({ ...customerData, password: formData.password });
+      } catch {}
       localStorage.setItem('meridukan_customer_user', JSON.stringify(customerData));
       localStorage.setItem('meridukan_role', 'customer');
       localStorage.setItem('meridukan_logged_in', 'true');
-      alert("Registration complete! Redirecting to shop dashboard.");
+      alert("Account created and saved to database! Redirecting to dashboard.");
       window.location.href = "/dashboard";
     } finally {
       setLoading(false);

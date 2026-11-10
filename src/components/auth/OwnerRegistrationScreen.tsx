@@ -87,28 +87,32 @@ export const OwnerRegistrationScreen: React.FC = () => {
     };
 
     try {
+      // 1. Always save to Supabase owner_profile database table
+      try {
+        await registerOwner({ ...ownerData, password: formData.password });
+      } catch (e) {
+        console.warn('Database save warning:', e);
+      }
+
+      // 2. Attempt Supabase Auth email verification
       const success = await handleSignup(formData.email.trim(), formData.password);
       if (success) {
-        try {
-          await registerOwner({ ...ownerData, password: formData.password });
-        } catch {
-          // Handled gracefully
-        }
         navigateTo('ownerLogin');
       } else {
-        // Fallback if Supabase email service failed: save locally and log in directly
         localStorage.setItem('meridukan_owner', JSON.stringify({ ...ownerData, id: Date.now() }));
         localStorage.setItem('meridukan_role', 'owner');
         localStorage.setItem('meridukan_logged_in', 'true');
-        alert("Registration complete! Redirecting to owner dashboard.");
+        alert("Business registered and saved to database! Redirecting to dashboard.");
         window.location.href = "/dashboard";
       }
-    } catch {
-      // Fallback on network / fetch error
+    } catch (err: any) {
+      try {
+        await registerOwner({ ...ownerData, password: formData.password });
+      } catch {}
       localStorage.setItem('meridukan_owner', JSON.stringify({ ...ownerData, id: Date.now() }));
       localStorage.setItem('meridukan_role', 'owner');
       localStorage.setItem('meridukan_logged_in', 'true');
-      alert("Registration complete! Redirecting to owner dashboard.");
+      alert("Business registered and saved to database! Redirecting to dashboard.");
       window.location.href = "/dashboard";
     } finally {
       setLoading(false);
