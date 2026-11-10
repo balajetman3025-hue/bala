@@ -1,3 +1,4 @@
+import { supabase } from '../supabaseClient';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Product,
@@ -205,6 +206,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     syncWithBackend();
   }, [syncWithBackend]);
+
+
 
   // Sync to localStorage
   useEffect(() => {

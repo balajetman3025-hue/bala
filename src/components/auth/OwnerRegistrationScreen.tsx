@@ -86,34 +86,30 @@ export const OwnerRegistrationScreen: React.FC = () => {
       email: formData.email.trim(),
     };
 
+    // Store pending credentials for verification screen
+    localStorage.setItem('meridukan_pending_email', formData.email.trim());
+    localStorage.setItem('meridukan_pending_role', 'owner');
+    localStorage.setItem('meridukan_owner', JSON.stringify({ ...ownerData, id: Date.now() }));
+
     try {
-      // 1. Always save to Supabase owner_profile database table
+      // 1. Save profile to Supabase database
       try {
         await registerOwner({ ...ownerData, password: formData.password });
-      } catch (e) {
-        console.warn('Database save warning:', e);
+      } catch (err) {
+        console.warn('Database save warning:', err);
       }
 
-      // 2. Attempt Supabase Auth email verification
-      const success = await handleSignup(formData.email.trim(), formData.password);
-      if (success) {
-        navigateTo('ownerLogin');
-      } else {
-        localStorage.setItem('meridukan_owner', JSON.stringify({ ...ownerData, id: Date.now() }));
-        localStorage.setItem('meridukan_role', 'owner');
-        localStorage.setItem('meridukan_logged_in', 'true');
-        alert("Business registered and saved to database! Redirecting to dashboard.");
-        window.location.href = "/dashboard";
-      }
-    } catch (err: any) {
+      // 2. Trigger Supabase confirmation email
       try {
-        await registerOwner({ ...ownerData, password: formData.password });
-      } catch {}
-      localStorage.setItem('meridukan_owner', JSON.stringify({ ...ownerData, id: Date.now() }));
-      localStorage.setItem('meridukan_role', 'owner');
-      localStorage.setItem('meridukan_logged_in', 'true');
-      alert("Business registered and saved to database! Redirecting to dashboard.");
-      window.location.href = "/dashboard";
+        await handleSignup(formData.email.trim(), formData.password);
+      } catch (err) {
+        console.warn('Supabase auth signup warning:', err);
+      }
+
+      // 3. Redirect to the intermediate "Verify Email" screen
+      navigateTo('verifyEmail');
+    } catch {
+      navigateTo('verifyEmail');
     } finally {
       setLoading(false);
     }

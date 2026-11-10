@@ -82,35 +82,30 @@ export const CustomerRegistrationScreen: React.FC = () => {
       email: formData.email.trim(),
     };
 
+    // Store pending credentials for verification screen
+    localStorage.setItem('meridukan_pending_email', formData.email.trim());
+    localStorage.setItem('meridukan_pending_role', 'customer');
+    localStorage.setItem('meridukan_customer_user', JSON.stringify(customerData));
+
     try {
-      // 1. Always save to Supabase customer_profiles database table
+      // 1. Save profile to Supabase database
       try {
         await registerCustomer({ ...customerData, password: formData.password });
-      } catch (e) {
-        console.warn('Database save warning:', e);
+      } catch (err) {
+        console.warn('Database save warning:', err);
       }
 
-      // 2. Attempt Supabase Auth email verification
-      const success = await handleSignup(formData.email.trim(), formData.password);
-      if (success) {
-        navigateTo('customerLogin');
-      } else {
-        // If email service failed, allow immediate access to dashboard
-        localStorage.setItem('meridukan_customer_user', JSON.stringify(customerData));
-        localStorage.setItem('meridukan_role', 'customer');
-        localStorage.setItem('meridukan_logged_in', 'true');
-        alert("Account created and saved to database! Redirecting to dashboard.");
-        window.location.href = "/dashboard";
-      }
-    } catch (err: any) {
+      // 2. Trigger Supabase confirmation email
       try {
-        await registerCustomer({ ...customerData, password: formData.password });
-      } catch {}
-      localStorage.setItem('meridukan_customer_user', JSON.stringify(customerData));
-      localStorage.setItem('meridukan_role', 'customer');
-      localStorage.setItem('meridukan_logged_in', 'true');
-      alert("Account created and saved to database! Redirecting to dashboard.");
-      window.location.href = "/dashboard";
+        await handleSignup(formData.email.trim(), formData.password);
+      } catch (err) {
+        console.warn('Supabase auth signup warning:', err);
+      }
+
+      // 3. Redirect to the intermediate "Verify Email" screen
+      navigateTo('verifyEmail');
+    } catch {
+      navigateTo('verifyEmail');
     } finally {
       setLoading(false);
     }

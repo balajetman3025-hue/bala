@@ -112,6 +112,7 @@ export type NavigationScreen =
   | 'ownerLogin'
   | 'customerRegister'
   | 'customerLogin'
+  | 'verifyEmail'
   | 'ownerDashboard'
   | 'products'
   | 'addProduct'

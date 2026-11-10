@@ -6,6 +6,7 @@ import { OwnerLoginScreen } from './components/auth/OwnerLoginScreen';
 import { OwnerRegistrationScreen } from './components/auth/OwnerRegistrationScreen';
 import { CustomerLoginScreen } from './components/auth/CustomerLoginScreen';
 import { CustomerRegistrationScreen } from './components/auth/CustomerRegistrationScreen';
+import { VerifyEmailScreen } from './components/auth/VerifyEmailScreen';
 import { OwnerDashboardScreen } from './components/owner/OwnerDashboardScreen';
 import { ProductListScreen } from './components/owner/ProductListScreen';
 import { AddEditProductScreen } from './components/owner/AddEditProductScreen';
@@ -39,6 +40,8 @@ export const AppContent: React.FC = () => {
       return <CustomerLoginScreen />;
     case 'customerRegister':
       return <CustomerRegistrationScreen />;
+    case 'verifyEmail':
+      return <VerifyEmailScreen />;
     case 'ownerDashboard':
       return <OwnerDashboardScreen />;
     case 'products':
