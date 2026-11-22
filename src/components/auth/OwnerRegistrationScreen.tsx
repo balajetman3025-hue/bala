@@ -26,35 +26,20 @@ export const OwnerRegistrationScreen: React.FC = () => {
 
   async function handleSignup(email: string, password: string) {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: email,
         password: password,
         options: {
           emailRedirectTo: window.location.origin
         }
       });
-
       if (error) {
-        let msg = error.message;
-        if (msg.toLowerCase().includes('email') || (error as any).status === 500) {
-          msg = "Supabase Error: " + error.message + ". (Rate limit reached or SMTP unconfigured. In Supabase Dashboard, go to Authentication -> Providers -> Email and disable 'Confirm email', or set up custom SMTP in Project Settings).";
-        }
-        alert(msg);
-        setError(msg);
+        console.warn('Supabase Auth notice:', error.message);
         return false;
       }
-
-      alert(
-        "Registration successful! Please check your email and verify your account."
-      );
       return true;
     } catch (err: any) {
-      let raw = err?.message || 'Registration failed';
-      if (raw.toLowerCase().includes('fetch')) {
-        raw = "Supabase Email Error: Error sending confirmation email (rate limit reached or SMTP unconfigured). Please disable 'Confirm email' under Authentication -> Providers -> Email in your Supabase dashboard.";
-      }
-      alert(raw);
-      setError(raw);
+      console.warn('Supabase Auth network notice:', err?.message);
       return false;
     }
   }

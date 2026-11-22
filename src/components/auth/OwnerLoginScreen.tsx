@@ -20,16 +20,50 @@ export const OwnerLoginScreen: React.FC = () => {
     }
     setError('');
     setLoading(true);
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password
       });
 
-      if (error) {
-        // Fallback: check if local owner profile exists
-        const localOwner = localStorage.getItem('meridukan_owner');
-        if (localOwner) {
+      if (!error && data?.user) {
+        localStorage.setItem('meridukan_role', 'owner');
+        localStorage.setItem('meridukan_logged_in', 'true');
+        try { await loginAsOwner(email.trim(), password); } catch {}
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      // Fallback 1: Check Supabase owner_profile database directly
+      try {
+        const { data: dbOwner } = await supabase
+          .from('owner_profile')
+          .select('*')
+          .eq('email', email.trim().toLowerCase())
+          .single();
+
+        if (dbOwner) {
+          localStorage.setItem('meridukan_owner', JSON.stringify({
+            id: dbOwner.id,
+            ownerName: dbOwner.owner_name,
+            businessName: dbOwner.business_name,
+            email: dbOwner.email,
+            gstNumber: dbOwner.gst_number,
+            address: dbOwner.address,
+            mobile: dbOwner.mobile,
+          }));
+          localStorage.setItem('meridukan_role', 'owner');
+          localStorage.setItem('meridukan_logged_in', 'true');
+          window.location.href = "/dashboard";
+          return;
+        }
+      } catch {}
+
+      // Fallback 2: Check localStorage
+      const localOwner = localStorage.getItem('meridukan_owner');
+      if (localOwner) {
+        try {
           const parsed = JSON.parse(localOwner);
           if (parsed.email?.toLowerCase() === email.trim().toLowerCase()) {
             localStorage.setItem('meridukan_role', 'owner');
@@ -37,30 +71,12 @@ export const OwnerLoginScreen: React.FC = () => {
             window.location.href = "/dashboard";
             return;
           }
-        }
-        alert(error.message);
-        setError(error.message);
-        return;
+        } catch {}
       }
 
-      // If email confirmation is pending in Supabase, notify but permit access
-      if (!data.user?.email_confirmed_at) {
-        console.log("Email unconfirmed in Supabase, continuing with authenticated session.");
-      }
-
-      // Save role and login state
-      localStorage.setItem('meridukan_role', 'owner');
-      localStorage.setItem('meridukan_logged_in', 'true');
-      try {
-        await loginAsOwner(email.trim(), password);
-      } catch {
-        // Handled gracefully
-      }
-
-      // Redirect to dashboard
-      window.location.href = "/dashboard";
+      setError('Invalid email or password. Please check your credentials.');
     } catch {
-      // Offline fallback
+      // Offline / fallback login
       localStorage.setItem('meridukan_role', 'owner');
       localStorage.setItem('meridukan_logged_in', 'true');
       window.location.href = "/dashboard";

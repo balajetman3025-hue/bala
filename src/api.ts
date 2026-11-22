@@ -3,7 +3,15 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+const isBrowser = typeof window !== 'undefined';
+const isCloud = isBrowser && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  // On cloud / Vercel, do not attempt to contact localhost:5000 which triggers browser Mixed Content & Failed to fetch errors
+  if (isCloud && (!import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL.includes('localhost'))) {
+    throw new Error('Local backend not accessible in cloud deployment');
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
     ...options,

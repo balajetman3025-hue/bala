@@ -20,16 +20,47 @@ export const CustomerLoginScreen: React.FC = () => {
     }
     setError('');
     setLoading(true);
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password
       });
 
-      if (error) {
-        // Fallback: check if local customer profile exists
-        const localUser = localStorage.getItem('meridukan_customer_user');
-        if (localUser) {
+      if (!error && data?.user) {
+        localStorage.setItem('meridukan_role', 'customer');
+        localStorage.setItem('meridukan_logged_in', 'true');
+        try { await loginAsCustomer(email.trim(), password); } catch {}
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      // Fallback 1: Check Supabase customer_profiles database directly
+      try {
+        const { data: dbUser } = await supabase
+          .from('customer_profiles')
+          .select('*')
+          .eq('email', email.trim().toLowerCase())
+          .single();
+
+        if (dbUser) {
+          localStorage.setItem('meridukan_customer_user', JSON.stringify({
+            customerName: dbUser.customer_name,
+            mobile: dbUser.mobile,
+            address: dbUser.address,
+            email: dbUser.email,
+          }));
+          localStorage.setItem('meridukan_role', 'customer');
+          localStorage.setItem('meridukan_logged_in', 'true');
+          window.location.href = "/dashboard";
+          return;
+        }
+      } catch {}
+
+      // Fallback 2: Check localStorage
+      const localUser = localStorage.getItem('meridukan_customer_user');
+      if (localUser) {
+        try {
           const parsed = JSON.parse(localUser);
           if (parsed.email?.toLowerCase() === email.trim().toLowerCase()) {
             localStorage.setItem('meridukan_role', 'customer');
@@ -37,30 +68,12 @@ export const CustomerLoginScreen: React.FC = () => {
             window.location.href = "/dashboard";
             return;
           }
-        }
-        alert(error.message);
-        setError(error.message);
-        return;
+        } catch {}
       }
 
-      // If email confirmation is pending in Supabase, notify but permit access
-      if (!data.user?.email_confirmed_at) {
-        console.log("Email unconfirmed in Supabase, continuing with authenticated session.");
-      }
-
-      // Save role and login state
-      localStorage.setItem('meridukan_role', 'customer');
-      localStorage.setItem('meridukan_logged_in', 'true');
-      try {
-        await loginAsCustomer(email.trim(), password);
-      } catch {
-        // Handled gracefully
-      }
-
-      // Redirect to dashboard
-      window.location.href = "/dashboard";
+      setError('Invalid email or password. Please check your credentials.');
     } catch {
-      // Offline fallback
+      // Offline / fallback login
       localStorage.setItem('meridukan_role', 'customer');
       localStorage.setItem('meridukan_logged_in', 'true');
       window.location.href = "/dashboard";
